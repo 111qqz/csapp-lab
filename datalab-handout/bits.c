@@ -179,13 +179,15 @@ int tmin(void) {
  *   0x7FFFFFFF
  */
 int isTmax(int x) {
-  //大体思路首先是根据，如果x是最大值0x7FFFFFFF,那么~x和x+1(自然溢出)应该相等。
-  // 不能用等号，但是我们可以用异或。x==y 等价于  !(x^y). 因此有了后半段!(x+1)^(~x)
-  // 但是满足这个条件的还有-1,也就是0xFFFFFFFF,因此我们需要排除掉-1.
-  // 还是用异或的性质，这回是0异或者任何数都等于其本身。
-  // 因此如果x为-1，那么前后两部分都为1，结果为0.
-  // 如果x为TMAX,那么前面为0，后面为1，结果为1.
-  // 如果x为其他任何数，前后结果都应为0. 结果为0。
+  /*
+  大体思路首先是根据，如果x是最大值0x7FFFFFFF,那么~x和x+1(自然溢出)应该相等。
+  不能用等号，但是我们可以用异或。x==y 等价于  !(x^y). 因此有了后半段!(x+1)^(~x)
+  但是满足这个条件的还有-1,也就是0xFFFFFFFF,因此我们需要排除掉-1.
+  还是用异或的性质，这回是0异或者任何数都等于其本身。
+  因此如果x为-1，那么前后两部分都为1，结果为0.
+  如果x为TMAX,那么前面为0，后面为1，结果为1.
+  如果x为其他任何数，前后结果都应为0. 结果为0。
+  */
   return (!(x+1))^!((x+1)^(~x));                                                                                                                                   
 }
 /* 
@@ -196,8 +198,14 @@ int isTmax(int x) {
  *   Max ops: 12
  *   Rating: 2
  */
+// 理解错误。误以为是要求当前长度x的所有奇数位上都是1.
+// 实际上要求和x的长度无关，而是要求[0,31]中，所有奇数位上都是1.
 int allOddBits(int x) {
-  return 2;
+  int half_mask = (0xAA<<8) | 0xAA;
+  int mask = (half_mask<<16) + half_mask;
+  // printf("mask:%08X x:%08x %08x\n",mask,x,x&mask);
+  return  !((x&mask)^mask);  
+  
 }
 /* 
  * negate - return -x 
@@ -207,7 +215,7 @@ int allOddBits(int x) {
  *   Rating: 2
  */
 int negate(int x) {
-  return 2;
+  return ~x + 1;
 }
 //3
 /* 
@@ -219,8 +227,21 @@ int negate(int x) {
  *   Max ops: 15
  *   Rating: 3
  */
+/* 把0-9的二进制写出来，发现0-7占满了3bit的二进制的8种组合。
+   因此考虑只判断8和9两种4bit的情况
+
+   构造mask,不在意的bit的位置放0，在意的bit位置放1.
+*/
 int isAsciiDigit(int x) {
-  return 2;
+  int mask = 0x0E;
+  int ones = x&mask;
+  int ones_3 = ones >> 3;
+  int tens = x>>4;
+  // printf("x: %08x tens: %08x ones:%08x\n",x,tens,ones);
+  int ones_ok = (!(ones^0x8)) | (!ones_3);
+  int tens_ok = !(tens^0x3);
+  return ones_ok & tens_ok;
+
 }
 /* 
  * conditional - same as x ? y : z 
@@ -230,7 +251,10 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 int conditional(int x, int y, int z) {
+  // int returnY = (!x)^1; // bool
+  //return y>>returnY + (1^returnY)*z;
   return 2;
+
 }
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
