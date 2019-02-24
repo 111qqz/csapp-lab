@@ -250,10 +250,13 @@ int isAsciiDigit(int x) {
  *   Max ops: 16
  *   Rating: 3
  */
+/*
+  关键思路是0xFFFFFFFF和0x00000000之间差了1.
+  而这两个数一个是全部位置都取的mask,一个是全部位置都不取的mask.
+
+*/
 int conditional(int x, int y, int z) {
-  // int returnY = (!x)^1; // bool
-  //return y>>returnY + (1^returnY)*z;
-  return 2;
+  return   z^(!x + ~0 )&(y^z);
 
 }
 /* 
