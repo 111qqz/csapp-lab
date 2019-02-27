@@ -266,8 +266,17 @@ int conditional(int x, int y, int z) {
  *   Max ops: 24
  *   Rating: 3
  */
+/*
+  大体思路是，符号位相同和符号位不同分别考虑
+  符号位相同:  考虑差的符号位。
+  符号位不同: 当x<0,y>=0时结果为1.
+*/
 int isLessOrEqual(int x, int y) {
-  return 2;
+  int minus = y + (~x+1);
+  int s_x = (x>>31)&1;
+  int s_y = (y>>31)&1;
+  int s_minus = (minus>>31) & 1;
+  return (s_x&(!s_y))| (!(s_x^s_y)&!s_minus); 
 }
 //4
 /* 
