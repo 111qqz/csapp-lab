@@ -307,14 +307,39 @@ int logicalNeg(int x) {
  *            howManyBits(298) = 10
  *            howManyBits(-5) = 4
  *            howManyBits(0)  = 1
- *            howManyBits(-1) = 1
+ *            howManyBits(-1) = 1 ??? should be 2?
  *            howManyBits(0x80000000) = 32
  *  Legal ops: ! ~ & ^ | + << >>
  *  Max ops: 90
  *  Rating: 4
  */
+/*
+  思路似乎可以转化成判断一个数（可正可负）的最高位的1的位置，加上判断这个数是正是负。
+  判断最高位1用二分的办法。
+  构造一个单调的函数，假设最高位位置为a,那么f((a,32))=0,f([0,a])=1.
+  被 howManyBits(-1)==1 困扰了好久，实际上就是0x1，只有一位，改位就是符号位的情况。 
+
+*/
 int howManyBits(int x) {
-  return 0;
+  int n = 0 ;
+  x^=(x<<1);
+  n +=  (!!( x & ((~0) << (n + 16)) )) << 4;   // 看高16位是否为0，是的话区间为[0,16),否的话为[16,32)
+  // printf("n:%d\n",n);
+  // printf("%d\n",!!(x & ((~0) << (n + 16))));
+  n +=  (!!( x & ((~0) << (n + 8)) )) << 3;
+  // printf("n:%d\n",n);
+  n +=  (!!( x & ((~0) << (n + 4)) )) << 2;
+  // printf("n:%d\n",n);
+  n +=  (!!( x & ((~0) << (n + 2)) )) << 1;
+  // printf("n:%d\n",n);
+  n +=  (!!( x & ((~0) << (n + 1)) ));
+  // printf("n:%d\n",n);
+
+  // int s = (x>>31)&1;
+  // int ret = n+1+((1^s)&(!!x));
+  // // printf("x:%d ret:%d\n",x,ret);
+  
+  return n+1;
 }
 //float
 /* 
