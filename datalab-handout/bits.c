@@ -287,8 +287,19 @@ int isLessOrEqual(int x, int y) {
  *   Max ops: 12
  *   Rating: 4 
  */
+/* 
+  0 == ~0+1
+  -2147483648 = ~-2147483648+1
+  满足 x == ~x+1
+  重点是x和~x+1的符号位相同，如果都是0那么x=0,如果都是1那么x=-214783648`
+*/
 int logicalNeg(int x) {
-  return 2;
+  int s1 = (x>>31)&1;
+  int s2 = ((~x+1)>>31)&1;
+  // printf("s1: %d s2:%d  %d  %d\n",s1,s2,s1|s2,~(s1|s2));
+  //  1 + negate(0) -> 1
+  //  1 + neagate(1) -> 0
+  return 1+(1+~(s1|s2));
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
