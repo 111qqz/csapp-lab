@@ -132,7 +132,6 @@ NOTES:
  *      the correct answers.
  */
 
-
 #endif
 //1
 /* 
@@ -148,8 +147,9 @@ NOTES:
    1 1 - > 0
 */
 // ~(~a & ~b)&~(a&b)
-int bitXor(int x, int y) {
-  int ans = ~(~x & ~y)&(~(x&y));
+int bitXor(int x, int y)
+{
+  int ans = ~(~x & ~y) & (~(x & y));
   // printf("%d\n",ans);
   return ans;
 }
@@ -162,12 +162,11 @@ int bitXor(int x, int y) {
 /*
   0X10000000
 */
-int tmin(void) {
+int tmin(void)
+{
 
   int ans = 0x1 << 31;
   return ans;
-
-
 }
 //2
 /* 
@@ -178,7 +177,8 @@ int tmin(void) {
  *   Rating: 1
  *   0x7FFFFFFF
  */
-int isTmax(int x) {
+int isTmax(int x)
+{
   /*
   大体思路首先是根据，如果x是最大值0x7FFFFFFF,那么~x和x+1(自然溢出)应该相等。
   不能用等号，但是我们可以用异或。x==y 等价于  !(x^y). 因此有了后半段!(x+1)^(~x)
@@ -188,7 +188,7 @@ int isTmax(int x) {
   如果x为TMAX,那么前面为0，后面为1，结果为1.
   如果x为其他任何数，前后结果都应为0. 结果为0。
   */
-  return (!(x+1))^!((x+1)^(~x));                                                                                                                                   
+  return (!(x + 1)) ^ !((x + 1) ^ (~x));
 }
 /* 
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -200,12 +200,12 @@ int isTmax(int x) {
  */
 // 理解错误。误以为是要求当前长度x的所有奇数位上都是1.
 // 实际上要求和x的长度无关，而是要求[0,31]中，所有奇数位上都是1.
-int allOddBits(int x) {
-  int half_mask = (0xAA<<8) | 0xAA;
-  int mask = (half_mask<<16) + half_mask;
+int allOddBits(int x)
+{
+  int half_mask = (0xAA << 8) | 0xAA;
+  int mask = (half_mask << 16) + half_mask;
   // printf("mask:%08X x:%08x %08x\n",mask,x,x&mask);
-  return  !((x&mask)^mask);  
-  
+  return !((x & mask) ^ mask);
 }
 /* 
  * negate - return -x 
@@ -214,7 +214,8 @@ int allOddBits(int x) {
  *   Max ops: 5
  *   Rating: 2
  */
-int negate(int x) {
+int negate(int x)
+{
   return ~x + 1;
 }
 //3
@@ -232,16 +233,16 @@ int negate(int x) {
 
    构造mask,不在意的bit的位置放0，在意的bit位置放1.
 */
-int isAsciiDigit(int x) {
+int isAsciiDigit(int x)
+{
   int mask = 0x0E;
-  int ones = x&mask;
+  int ones = x & mask;
   int ones_3 = ones >> 3;
-  int tens = x>>4;
+  int tens = x >> 4;
   // printf("x: %08x tens: %08x ones:%08x\n",x,tens,ones);
-  int ones_ok = (!(ones^0x8)) | (!ones_3);
-  int tens_ok = !(tens^0x3);
+  int ones_ok = (!(ones ^ 0x8)) | (!ones_3);
+  int tens_ok = !(tens ^ 0x3);
   return ones_ok & tens_ok;
-
 }
 /* 
  * conditional - same as x ? y : z 
@@ -255,9 +256,9 @@ int isAsciiDigit(int x) {
   而这两个数一个是全部位置都取的mask,一个是全部位置都不取的mask.
 
 */
-int conditional(int x, int y, int z) {
-  return   z^(!x + ~0 )&(y^z);
-
+int conditional(int x, int y, int z)
+{
+  return z ^ (!x + ~0) & (y ^ z);
 }
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
@@ -271,12 +272,13 @@ int conditional(int x, int y, int z) {
   符号位相同:  考虑差的符号位。
   符号位不同: 当x<0,y>=0时结果为1.
 */
-int isLessOrEqual(int x, int y) {
-  int minus = y + (~x+1);
-  int s_x = (x>>31)&1;
-  int s_y = (y>>31)&1;
-  int s_minus = (minus>>31) & 1;
-  return (s_x&(!s_y))| (!(s_x^s_y)&!s_minus); 
+int isLessOrEqual(int x, int y)
+{
+  int minus = y + (~x + 1);
+  int s_x = (x >> 31) & 1;
+  int s_y = (y >> 31) & 1;
+  int s_minus = (minus >> 31) & 1;
+  return (s_x & (!s_y)) | (!(s_x ^ s_y) & !s_minus);
 }
 //4
 /* 
@@ -293,13 +295,14 @@ int isLessOrEqual(int x, int y) {
   满足 x == ~x+1
   重点是x和~x+1的符号位相同，如果都是0那么x=0,如果都是1那么x=-214783648`
 */
-int logicalNeg(int x) {
-  int s1 = (x>>31)&1;
-  int s2 = ((~x+1)>>31)&1;
+int logicalNeg(int x)
+{
+  int s1 = (x >> 31) & 1;
+  int s2 = ((~x + 1) >> 31) & 1;
   // printf("s1: %d s2:%d  %d  %d\n",s1,s2,s1|s2,~(s1|s2));
   //  1 + negate(0) -> 1
   //  1 + neagate(1) -> 0
-  return 1+(1+~(s1|s2));
+  return 1 + (1 + ~(s1 | s2));
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
@@ -320,26 +323,27 @@ int logicalNeg(int x) {
   被 howManyBits(-1)==1 困扰了好久，实际上就是0x1，只有一位，改位就是符号位的情况。 
 
 */
-int howManyBits(int x) {
-  int n = 0 ;
-  x^=(x<<1);
-  n +=  (!!( x & ((~0) << (n + 16)) )) << 4;   // 看高16位是否为0，是的话区间为[0,16),否的话为[16,32)
+int howManyBits(int x)
+{
+  int n = 0;
+  x ^= (x << 1);
+  n += (!!(x & ((~0) << (n + 16)))) << 4; // 看高16位是否为0，是的话区间为[0,16),否的话为[16,32)
   // printf("n:%d\n",n);
   // printf("%d\n",!!(x & ((~0) << (n + 16))));
-  n +=  (!!( x & ((~0) << (n + 8)) )) << 3;
+  n += (!!(x & ((~0) << (n + 8)))) << 3;
   // printf("n:%d\n",n);
-  n +=  (!!( x & ((~0) << (n + 4)) )) << 2;
+  n += (!!(x & ((~0) << (n + 4)))) << 2;
   // printf("n:%d\n",n);
-  n +=  (!!( x & ((~0) << (n + 2)) )) << 1;
+  n += (!!(x & ((~0) << (n + 2)))) << 1;
   // printf("n:%d\n",n);
-  n +=  (!!( x & ((~0) << (n + 1)) ));
+  n += (!!(x & ((~0) << (n + 1))));
   // printf("n:%d\n",n);
 
   // int s = (x>>31)&1;
   // int ret = n+1+((1^s)&(!!x));
   // // printf("x:%d ret:%d\n",x,ret);
-  
-  return n+1;
+
+  return n + 1;
 }
 //float
 /* 
@@ -353,8 +357,18 @@ int howManyBits(int x) {
  *   Max ops: 30
  *   Rating: 4
  */
-unsigned floatScale2(unsigned uf) {
-  return 2;
+unsigned floatScale2(unsigned uf)
+{
+  int exp_ = (uf & 0x7f800000) >> 23;
+  int s_ = uf & 0x80000000;
+  if (exp_ == 0)
+    return (uf << 1) | s_;
+  if (exp_ == 255)
+    return uf;
+  ++exp_;
+  if (exp_ == 255)
+    return 0x7f800000 | s_;
+  return (uf & 0x807fffff) | (exp_ << 23);
 }
 /* 
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -368,8 +382,30 @@ unsigned floatScale2(unsigned uf) {
  *   Max ops: 30
  *   Rating: 4
  */
-int floatFloat2Int(unsigned uf) {
-  return 2;
+int floatFloat2Int(unsigned uf)
+{
+  int s_ = uf >> 31;
+  int exp_ = ((uf & 0x7f800000) >> 23) - 127;
+  int frac_ = (uf & 0x007fffff) | 0x00800000;
+  if (!(uf & 0x7fffffff))
+    return 0;
+
+  if (exp_ > 31)
+    return 0x80000000;
+  if (exp_ < 0)
+    return 0;
+
+  if (exp_ > 23)
+    frac_ <<= (exp_ - 23);
+  else
+    frac_ >>= (23 - exp_);
+
+  if (!((frac_ >> 31) ^ s_))
+    return frac_;
+  else if (frac_ >> 31)
+    return 0x80000000;
+  else
+    return ~frac_ + 1;
 }
 /* 
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
@@ -384,6 +420,12 @@ int floatFloat2Int(unsigned uf) {
  *   Max ops: 30 
  *   Rating: 4
  */
-unsigned floatPower2(int x) {
-    return 2;
+unsigned floatPower2(int x)
+{
+  int exp = x + 127;
+  if (exp <= 0)
+    return 0;
+  if (exp >= 255)
+    return 0x7f800000;
+  return exp << 23;
 }
