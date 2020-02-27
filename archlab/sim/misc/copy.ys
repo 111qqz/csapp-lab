@@ -1,0 +1,46 @@
+    .pos 0
+    irmovq stack, %rsp  # Set up stack pointer
+    call main # Execute main function
+    halt
+
+.align 8
+# Source block
+src:
+    .quad 0x00a
+    .quad 0x0b0
+    .quad 0xc00
+# Destination block
+dest:
+    .quad 0x111
+    .quad 0x222
+    .quad 0x333
+
+
+main:
+    irmovq src,%rdi
+    irmovq dest,%rsi
+    irmovq $3,%rdx
+
+    call copy_block
+    ret
+
+copy_block:
+    irmovq $8,%r8
+    irmovq $1,%r9
+    irmovq $0, %rcx 
+loop:
+    andq  %rdx, %rdx
+    jle finish
+    mrmovq (%rdi),%rax
+    rmmovq %rax,(%rsi)
+    xorq %rax,%rcx
+    subq %r9, %rdx
+    addq %r8,%rdi
+    addq %r8,%rsi
+    jmp loop
+finish:
+    rrmovq  %rcx,%rax
+    ret
+
+.pos 0x200
+stack:
