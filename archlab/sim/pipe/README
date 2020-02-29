@@ -20,7 +20,7 @@ different HCL files when working on the different homework problems.
 Binary	VERSION		HCL File	  Description
 psim	std		pipe-std.hcl	  Standard simulator (default)
 psim	broken		pipe-broken.hcl   Does not handle any hazards
-psim	full		pipe-full.hcl	  For adding iaddq
+psim	full		pipe-full.hcl	  For addingpValP iaddq
 psim	nobypass	pipe-nobypass.hcl For implementing PIPE-
 					  (called pipe-stall.hcl in text)
 psim	lf		pipe-lf.hcl	  For implementing load forwarding
@@ -119,13 +119,13 @@ pipe-broken.hcl		A simulator that does not detect or handle hazards
 			(useful when explaining hazards in lectures)
 
 * HCL files for various CS:APP Homework Problems
-pipe-nobypass.hcl	4.51: Build version of PIPE without bypassing 
+pipe-nobypass.hcl	4.53: Build version of PIPE without bypassing 
 			(called pipe-stall.hcl in the text)
-pipe-full.hcl		4.52-53: Add iaddq instruction to PIPE
-pipe-nt.hcl		4.54: Implement branch not taken strategy
-pipe-btfnt.hcl		4.55: Implement back-taken forward-not-taken strategy
-pipe-lf.hcl		4.56: Implement load forwarding logic
-pipe-1w.hcl		4.57: Implement single ported register file
+pipe-full.hcl		4.53: Add iaddq instruction to PIPE
+pipe-nt.hcl		4.55: Implement branch not taken strategy
+pipe-btfnt.hcl		4.56: Implement back-taken forward-not-taken strategy
+pipe-lf.hcl		4.57: Implement load forwarding logic
+pipe-1w.hcl		4.58: Implement single ported register file
 
 * HCL solution files for the CS:APP Homework Problems (Instructors only)
 pipe-nobypass-ans.hcl	4.51 solution
