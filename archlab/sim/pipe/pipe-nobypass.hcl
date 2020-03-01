@@ -309,15 +309,30 @@ word Stat = [
 bool F_bubble = 0;
 bool F_stall =
 	# Modify the following to stall the update of pipeline register F
-	0 ||
+
+	# load/use hazard
+	E_icode in {IMRMOVQ, IPOPQ} && E_dstM in {d_srcA, d_srcB}
+	||
 	# Stalling at fetch while ret passes through pipeline
-	IRET in { D_icode, E_icode, M_icode };
+	IRET in { D_icode, E_icode, M_icode } ||
+	e_dstE in {d_srcA, d_srcB} ||
+	M_dstM in {d_srcA, d_srcB} ||
+	M_dstE in {d_srcA, d_srcB} ||
+	W_dstM in {d_srcA, d_srcB} ||
+	W_dstE in {d_srcA, d_srcB};
 
 # Should I stall or inject a bubble into Pipeline Register D?
 # At most one of these can be true.
-bool D_stall = 
+bool D_stall =  
 	# Modify the following to stall the instruction in decode
-	0;
+	E_icode in {IMRMOVQ, IPOPQ} && E_dstM in {d_srcA, d_srcB}
+	||
+	e_dstE in {d_srcA, d_srcB} ||
+	M_dstM in {d_srcA, d_srcB} ||
+	M_dstE in {d_srcA, d_srcB} ||
+	W_dstM in {d_srcA, d_srcB} ||
+	W_dstE in {d_srcA, d_srcB} ;
+	# load/use hazard
 
 bool D_bubble =
 	# Mispredicted branch
@@ -335,7 +350,8 @@ bool E_bubble =
 	# Mispredicted branch
 	(E_icode == IJXX && !e_Cnd) ||
 	# Modify the following to inject bubble into the execute stage
-	0;
+	E_icode in {IMRMOVQ, IPOPQ} && E_dstM in {d_srcA, d_srcB};
+	# load/use hazard
 
 # Should I stall or inject a bubble into Pipeline Register M?
 # At most one of these can be true.
