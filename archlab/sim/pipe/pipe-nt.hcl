@@ -54,6 +54,12 @@ wordsig ALUADD	'A_ADD'		     # ALU should add its arguments
 ##### Jump conditions referenced explicitly
 wordsig UNCOND 'C_YES'       	     # Unconditional transfer
 
+# Q:how to we know a branch is mispredicted?
+# A: use M_Cnd
+
+# Q: valP怎么传递到M_valA的？ 对于总是预测跳转的pipe来说
+
+
 ##### Possible instruction status values                       #####
 wordsig SBUB	'STAT_BUB'	# Bubble in stage
 wordsig SAOK	'STAT_AOK'	# Normal execution
@@ -63,8 +69,7 @@ wordsig SHLT	'STAT_HLT'	# Halt instruction encountered
 
 ##### Signals that can be referenced by control logic ##############
 
-##### Pipeline Register F ##########################################
-
+##### Pipeline Register F #############################if_id_next
 wordsig F_predPC 'pc_curr->pc'	     # Predicted value of PC
 
 ##### Intermediate Values in Fetch Stage ###########################
@@ -138,8 +143,9 @@ wordsig W_valM  'mem_wb_curr->valm'	# Memory M value
 
 ## What address should instruction be fetched at
 word f_pc = [
-	# Mispredicted branch.  Fetch at incremented PC
-	M_icode == IJXX && !M_Cnd : M_valA;
+	# Mispredicted branch.  Fetch at address at M_valA
+	M_icode == IJXX && M_ifun != UNCOND && !M_Cnd: M_valA;
+	# M_icode == IJXX && !M_Cnd : M_valA;
 	# Completion of RET instruction
 	W_icode == IRET : W_valM;
 	# Default: Use predicted value of PC
@@ -183,7 +189,8 @@ bool need_valC =
 # Predict next value of PC
 word f_predPC = [
 	# BNT: This is where you'll change the branch prediction rule
-	f_icode in { IJXX, ICALL } : f_valC;
+	f_icode == ICALL : f_valC;
+	f_icode == IJXX && f_ifun == UNCOND : f_valC;
 	1 : f_valP;
 ];
 
@@ -220,7 +227,11 @@ word d_dstM = [
 ## What should be the A value?
 ## Forward into decode stage for valA
 word d_valA = [
-	D_icode in { ICALL, IJXX } : D_valP; # Use incremented PC
+	D_icode in { ICALL, IJXX } : F_predPC; # Use incremented PC
+	# D_icode == ICALL: D_valP;
+	# D_icode == IJXX && f_ifun == UNCOND: D_valP;  # Use incremented PC
+	# D_icode == IJXX && f_ifun != UNCOND: D_valC;  #   
+
 	d_srcA == e_dstE : e_valE;    # Forward valE from execute
 	d_srcA == M_dstM : m_valM;    # Forward valM from memory
 	d_srcA == M_dstE : M_valE;    # Forward valE from memory
@@ -243,6 +254,12 @@ word d_valB = [
 # BNT: When some branches are predicted as not-taken, you need some
 # way to get valC into pipeline register M, so that
 # you can correct for a mispredicted branch.
+
+## which register in M stage should I sue to store valC?
+## 先用M_valA试试
+
+# E_valA是从 Sel+Fwd 得到的，也就是 d_valA 
+
 
 ## Select input A to ALU
 word aluA = [
@@ -282,7 +299,7 @@ word e_dstE = [
 ];
 
 ################ Memory Stage ######################################
-
+# M_valA是用E_valA得到的
 ## Select memory address
 word mem_addr = [
 	M_icode in { IRMMOVQ, IPUSHQ, ICALL, IMRMOVQ } : M_valE;
