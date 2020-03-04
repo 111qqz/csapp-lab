@@ -307,7 +307,6 @@ word w_dstM = W_dstM;
 
 ## Set M port value
 word w_valM = W_valM;
-
 ## Update processor status
 word Stat = [
 	W_stat == SBUB : SAOK;
