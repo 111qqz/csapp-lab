@@ -17,9 +17,11 @@ ncopy:
 # You can modify this portion
 	# Loop header
 	xorq %rax,%rax		# count = 0;
-	irmovq $1, %r10
+	irmovq $1, %r12
+	irmovq $2, %r13
+	irmovq $16, %r14
 	pushq %rdx
-	subq  %r10, %rdx
+	subq  %r12, %rdx
 	popq  %rdx		# len <= 1?
 	jle Single		# if so, goto Done:
 
@@ -42,14 +44,14 @@ Npos:
 	iaddq $1, %rax
 
 Npos2:	
-    irmovq $2, %r10
-	subq %r10, %rdx		# len-=2
-	irmovq $16, %r10
-	addq %r10, %rdi		# src++
-	addq %r10, %rsi		# dst++
-	irmovq $1, %r10
+    # irmovq $2, %r10
+	subq %r13, %rdx		# len-=2
+	# irmovq $16, %r10
+	addq %r14, %rdi		# src++
+	addq %r14, %rsi		# dst++
+	# irmovq $1, %r10
 	pushq %rdx
-	subq  %r10, %rdx
+	subq  %r12, %rdx
 	popq  %rdx		# len > 1?
 
 	jg Loop			# if so, goto Loop:
