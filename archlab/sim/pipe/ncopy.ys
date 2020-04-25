@@ -17,10 +17,11 @@ ncopy:
 # You can modify this portion
 	# Loop header
 	xorq %rax,%rax		# count = 0;
-	pushq %rdx
+	# pushq %rdx
 	iaddq $-1, %rdx
-	popq  %rdx		# len <= 1?
-	jle Single		# if so, goto Done:
+	# popq  %rdx		# len <= 1?
+	je Single		# 只有一个元素
+	jl Done         # 有0个元素
 
 Loop:	
 	mrmovq (%rdi), %r10	# read val from src...
@@ -37,19 +38,19 @@ Npos:
 	iaddq $1, %rax
 
 Npos2:	
-	iaddq $-2, %rdx
+	iaddq $-1, %rdx
 	iaddq $16, %rdi		# src++
 	iaddq $16, %rsi		# dst++
 	# irmovq $1, %r10
-	pushq %rdx
+	# pushq %rdx
 	iaddq $-1, %rdx
-	popq  %rdx		# len > 1?
+	# popq  %rdx		# len > 1?
 
 	jg Loop			# if so, goto Loop:
 
 Single:
 	andq %rdx, %rdx
-	jle Done
+	jl Done
 	mrmovq (%rdi),%r10
 	rmmovq %r10, (%rsi)
 	andq %r10, %r10
