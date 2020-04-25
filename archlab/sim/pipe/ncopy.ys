@@ -49,12 +49,12 @@ Npos3:
 	jle	Npos4
 	iaddq $1, %rax
 Npos4:	
-	iaddq $-1, %rdx
+	# iaddq $-1, %rdx
 	iaddq $32, %rdi		# src++
 	iaddq $32, %rsi		# dst++
 	# irmovq $1, %r10
 	# pushq %rdx
-	iaddq $-3, %rdx
+	iaddq $-4, %rdx
 
 	jg Loop			# if so, goto Loop:
 
