@@ -18,17 +18,18 @@ ncopy:
 	# Loop header
 	xorq %rax,%rax		# count = 0;
 	# pushq %rdx
-	iaddq $-1, %rdx
-	jle Remain   #  len <= 1
-	# popq  %rdx		# len <= 1?
-	# je Remain		# 只有一个元素
-	# jl Done         # 有0个元素
+	iaddq $-3, %rdx
+	jle Remain   #  len <= 3
 
 Loop:	
 	mrmovq (%rdi), %r10	# read val from src...
-	mrmovq 8(%rdi), %r11 # read val2 from src++
+	mrmovq 8(%rdi), %r11 # read val2 from src
+	mrmovq 16(%rdi), %r12 # raed val3 from src
+	mrmovq 24(%rdi), %r13  # read val4 from src
 	rmmovq %r10, (%rsi)	# ...and store it to dst
-	rmmovq %r11, 8(%rsi) # .. store val2 to dst++
+	rmmovq %r11, 8(%rsi) # .. store val2 to dst
+	rmmovq %r12, 16(%rsi)  # .. store val3 to dst
+	rmmovq %r13, 24(%rsi)  # .. store val4 to dst 
 	andq %r10, %r10		# val <= 0?
 	jle Npos		# if so, goto Npos:
 	iaddq $1, %rax
@@ -38,27 +39,45 @@ Npos:
 	jle	Npos2
 	iaddq $1, %rax
 
-Npos2:	
+Npos2:
+	andq %r12, %r12
+	jle	Npos3
+	iaddq $1, %rax
+
+Npos3:
+	andq %r13, %r13
+	jle	Npos4
+	iaddq $1, %rax
+Npos4:	
 	iaddq $-1, %rdx
-	iaddq $16, %rdi		# src++
-	iaddq $16, %rsi		# dst++
+	iaddq $32, %rdi		# src++
+	iaddq $32, %rsi		# dst++
 	# irmovq $1, %r10
 	# pushq %rdx
-	iaddq $-1, %rdx
-	# popq  %rdx		# len > 1?
+	iaddq $-3, %rdx
 
 	jg Loop			# if so, goto Loop:
 
+
+# 可能剩下[0,3]
 Remain:
+	iaddq $3, %rdx
+Remain_loop:
 	andq %rdx, %rdx
-	jl Done
+	jle Done
 	mrmovq (%rdi),%r10
 	rmmovq %r10, (%rsi)
 	andq %r10, %r10
-	jle Done 
+	jle Remain_Npos
 	# irmovq $1, %r10
 	# addq %r10, %rax		# count++
 	iaddq $1, %rax
+Remain_Npos:
+	iaddq $-1, %rdx
+	iaddq $8, %rdi
+	iaddq $8, %rsi 
+	jmp  Remain_loop
+
 ##################################################################
 # Do not modify the following section of code
 # Function epilogue.
