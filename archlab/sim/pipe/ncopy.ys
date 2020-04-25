@@ -19,9 +19,10 @@ ncopy:
 	xorq %rax,%rax		# count = 0;
 	# pushq %rdx
 	iaddq $-1, %rdx
+	jle Remain   #  len <= 1
 	# popq  %rdx		# len <= 1?
-	je Single		# 只有一个元素
-	jl Done         # 有0个元素
+	# je Remain		# 只有一个元素
+	# jl Done         # 有0个元素
 
 Loop:	
 	mrmovq (%rdi), %r10	# read val from src...
@@ -48,7 +49,7 @@ Npos2:
 
 	jg Loop			# if so, goto Loop:
 
-Single:
+Remain:
 	andq %rdx, %rdx
 	jl Done
 	mrmovq (%rdi),%r10
