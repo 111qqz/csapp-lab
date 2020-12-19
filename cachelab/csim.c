@@ -58,7 +58,7 @@ typedef struct {
 } AddressBits;
 // 64 bit address,m=64
 // tag bit t = m-(b+s)
-// parse 64 address bits into tag bits,index bits and offset bits.ƒ
+// parse 64 address bits into tag bits,index bits and offset bits
 void ParseAddress(const Arg *arg, const ULL raw_addr, AddressBits *addr) {
   const unsigned int index_and_block_bit_length =
       arg->block_bits + arg->set_index_bits;
@@ -74,8 +74,9 @@ void ParseAddress(const Arg *arg, const ULL raw_addr, AddressBits *addr) {
   addr->index_bits = (raw_addr & index_bit_mask) >> arg->block_bits;
   addr->offset_bits = raw_addr & block_bit_mask;
   addr->block_number = raw_addr / (1ULL << arg->block_bits);
-    printf("addr:%llx tag:%lld index:%lld osset:%lld block:%lld \n", raw_addr, addr->tag_bits,
-   addr->index_bits, addr->offset_bits, addr->block_number);
+  // printf("addr:%llx tag:%lld index:%lld osset:%lld block:%lld \n", raw_addr,
+  //        addr->tag_bits, addr->index_bits, addr->offset_bits,
+  //        addr->block_number);
 }
 void TestParseAddress(const Arg *arg) {
   for (int addr = 0; addr < (1ULL << address_space_size); addr++) {
@@ -143,123 +144,154 @@ typedef struct {
 } Set;
 
 Set *set;
-
-// void printSummary(int hits,       /* number of  hits */
-//                   int misses,     /* number of misses */
-//                   int evictions); /* number of evictions */
 struct cache_summary_t {
   int hits;
   int misses;
   int evitions;
 } cache_summary;
+char operation_table[5] = {'I', 'L', 'S', 'M'};
+
+bool CheckCacheLineHit(const AddressBits addr, Set *cur_set, const int index) {
+  bool any_of_line_hit = false;
+  for (int j = 0; j < cur_set->num_of_lines; j++) {
+    Line *cur_line = &cur_set->lines[j];
+    if (cur_line->valid == 1 && cur_line->tag == addr.tag_bits) {
+      // printf("addr.tag_bits:%lld\n", addr.tag_bits);
+      cache_summary.hits++;
+      cur_line->age = index;
+      any_of_line_hit = true;
+      break;
+    }
+  }
+  return any_of_line_hit;
+}
+
+bool CheckCacheLineEmpty(const AddressBits addr, Set *cur_set,
+                         const int index) {
+  bool any_of_line_empty = false;
+  for (int j = 0; j < cur_set->num_of_lines; j++) {
+    Line *cur_line = &cur_set->lines[j];
+    if (cur_line->valid == 0) {
+      cache_summary.misses++;
+      cur_line->valid = 1;
+      cur_line->tag = addr.tag_bits;
+      cur_line->age = index;
+
+      any_of_line_empty = true;
+      break;
+    }
+  }
+  return any_of_line_empty;
+}
+
+void NaiveLru(const AddressBits addr, Set *cur_set, const int index) {
+  int evict_line;
+  int min_age = lines_in_trace_file;
+  // printf("set[%lld]->num_of_lines:%d\n",addr.index_bits,cur_set->num_of_lines);
+  for (int j = 0; j < cur_set->num_of_lines; j++) {
+    Line *cur_line = &cur_set->lines[j];
+    // printf("cur_line age:%d\n",cur_line->age);
+    if (cur_line->age < min_age) {
+      min_age = cur_line->age;
+      evict_line = j;
+    }
+  }
+  // printf("evict_line:%d min_age:%d\n",evict_line,min_age);
+  cache_summary.misses++;
+  cache_summary.evitions++;
+  cur_set->lines[evict_line].tag = addr.tag_bits;
+  cur_set->lines[evict_line].age = index;
+}
+
+void EvicteCacheLine(const AddressBits addr, Set *cur_set, const int index) {
+  // I'm too lazy to use Doubly linked list and hashmap
+  NaiveLru(addr, cur_set, index);
+}
 
 void SimulateCache(const Arg *arg) {
   memset(&cache_summary, 0, sizeof(cache_summary));
   //   instruction_load, data_load, data_store, data_modify
-  char operation_table[5] = {'I', 'L', 'S', 'M'};
+
   for (int i = 0; i < lines_in_trace_file; i++) {
     // ignore instruction load
     if (trace[i].op == 0) continue;
     AddressBits addr;
-    // printf("trace_address:%lld ",trace[i].address);
     ParseAddress(arg, trace[i].address, &addr);
-    // printf("tag:%lld set_index:%lld offset:%lld block_number:%lld\n",addr.tag_bits,addr.index_bits,addr.offset_bits,addr.block_number);
     Set *cur_set = &set[addr.index_bits];
-    printf("set:%lld tag:%d valid:%d \n",addr.index_bits,cur_set->lines[0].tag,cur_set->lines[0].valid);
-    // printf("num of lines in cur_set:%d\n",cur_set->num_of_lines);
-    printf("valid:%d\n",cur_set->lines[0].valid);
-    bool any_of_line_hit = false;
-    for (int j = 0; j < cur_set->num_of_lines; j++) {
-      Line *cur_line = &cur_set->lines[j];
-      if (cur_line->valid == 1 && cur_line->tag == addr.tag_bits) {
-        printf("addr.tag_bits:%lld\n",addr.tag_bits);
-        cache_summary.hits++;
-        cur_line->age = i;
+    // data load or data store
+    if (trace[i].op <= 2) {
+      bool any_of_line_hit = CheckCacheLineHit(addr, cur_set, i);
+      if (any_of_line_hit) {
         if (arg->verbose) {
           printf("%c %lld,%d hit\n", operation_table[trace[i].op],
                  trace[i].address, trace[i].size);
         }
-        any_of_line_hit = true;
-        break;
+        continue;
       }
-    }
-    if (any_of_line_hit) continue;
-    // printf("none of lines hit\n");
-    bool any_of_line_empty = false;
-    for (int j = 0; j < cur_set->num_of_lines; j++) {
-      Line *cur_line = &cur_set->lines[j];
-      if (cur_line->valid == 0) {
-        cache_summary.misses++;
-        cur_line->valid = 1;
-        cur_line->tag = addr.tag_bits;
-        cur_line->age = i;
+      bool any_of_line_empty = CheckCacheLineEmpty(addr, cur_set, i);
+      if (any_of_line_empty) {
         if (arg->verbose) {
           printf("%c %lld,%d miss\n", operation_table[trace[i].op],
                  trace[i].address, trace[i].size);
         }
-        any_of_line_empty = true;
-        break;
+        continue;
+      }
+      EvicteCacheLine(addr, cur_set, i);
+      if (arg->verbose) {
+        printf("%c %lld,%d miss eviction\n", operation_table[trace[i].op],
+               trace[i].address, trace[i].size);
+      }
+    } else {
+      // data modify
+      bool any_of_line_hit_in_data_load = CheckCacheLineHit(addr, cur_set, i);
+      if (any_of_line_hit_in_data_load) {
+        // if 'data load' hit cache, then 'data store' must also hit cache
+        cache_summary.hits++;
+        if (arg->verbose) {
+          printf("%c %lld,%d hit hit \n", operation_table[trace[i].op],
+                 trace[i].address, trace[i].size);
+        }
+        continue;
+      }
+      bool any_of_line_empty = CheckCacheLineEmpty(addr, cur_set, i);
+      if (any_of_line_empty) {
+        cache_summary.hits++;
+        if (arg->verbose) {
+          printf("%c %lld,%d miss hit\n", operation_table[trace[i].op],
+                 trace[i].address, trace[i].size);
+        }
+        continue;
+      }
+      EvicteCacheLine(addr, cur_set, i);
+      if (arg->verbose) {
+        cache_summary.hits++;
+        printf("%c %lld,%d miss eviction hit\n", operation_table[trace[i].op],
+               trace[i].address, trace[i].size);
       }
     }
-    if (any_of_line_empty) continue;
-    printf("none of lines empty\n");
-    // naive LRU
-    // I'm too lazy to use Doubly linked list and hashmap
-    int evict_line;
-    int min_age = lines_in_trace_file;
-    // printf("set[%lld]->num_of_lines:%d\n",addr.index_bits,cur_set->num_of_lines);
-    for (int j = 0; j < cur_set->num_of_lines; j++) {
-      Line *cur_line = &cur_set->lines[j];
-      // printf("cur_line age:%d\n",cur_line->age);
-      if (cur_line->age < min_age) {
-        min_age = cur_line->age;
-        evict_line = j;
-      }
-    }
-    // printf("evict_line:%d min_age:%d\n",evict_line,min_age);
-    cache_summary.misses++;
-    cache_summary.evitions++;
-    cur_set->lines[evict_line].tag = addr.tag_bits;
-    cur_set->lines[evict_line].age = i;
-    if (arg->verbose) {
-      printf("%c %lld,%d miss eviction\n", operation_table[trace[i].op],
-      trace[i].address, trace[i].size);
-    }
-    // }
   }
 }
 int main(int argc, char **argv) {
-  //   printf("argc:%d\n", argc);
   Arg arg;
   ParseArgs(argc, argv, &arg);
-  //   printf("%d %d %d\n", arg.block_bits, arg.set_index_bits,
-  //   arg.lines_per_set); TestParseAddress(&arg); TestParseTraceFile();
   ParseTraceFile(arg.tracefile);
   int total_set_num = 1 << arg.set_index_bits;
-  set = (Set *)malloc( total_set_num * sizeof(Set));
-  memset(set, 0, (1 << arg.block_bits) * sizeof(Set));
-  printf("total set num :%d\n",total_set_num);
+  // printf("total_set_num:%d\n",total_set_num);
+  set = (Set *)malloc(total_set_num * sizeof(Set));
+  memset(set, 0, total_set_num * sizeof(Set));
   for (int i = 0; i < total_set_num; i++) {
     set[i].lines = (Line *)malloc(arg.lines_per_set * sizeof(Line));
-    memset(set[i].lines,0,sizeof(arg.lines_per_set*sizeof(Line)));
+    memset(set[i].lines, 0, arg.lines_per_set * sizeof(Line));
     set[i].num_of_lines = arg.lines_per_set;
   }
   SimulateCache(&arg);
   printSummary(cache_summary.hits, cache_summary.misses,
                cache_summary.evitions);
 
-  //   for (int i = 0; i < (1 << arg.block_bits); i++) {
-  //     printf("valid:%d tag:%d\n", set[i].valid, set[i].tag);
-  //   }
-  // printSummary(0, 0, 0);
-  // parse arguments from command line
-  // for ( int i = 0 ; i < total_set_num ; i++){
-  //   free(set[i].lines);
-  // }
-  // free(set);
-  // if (set != NULL) {
-  //   free(set);
-  // }
+  for (int i = 0; i < total_set_num; i++) {
+    free(set[i].lines);
+  }
+  free(set);
 
   return 0;
 }
