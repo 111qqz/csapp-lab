@@ -1,0 +1,4 @@
+archlab/archlab.pdf filter=lfs diff=lfs merge=lfs -text
+archlab/simguide.pdf filter=lfs diff=lfs merge=lfs -text
+attacklab/attacklab.pdf filter=lfs diff=lfs merge=lfs -text
+bomblab/bomblab.pdf filter=lfs diff=lfs merge=lfs -text
