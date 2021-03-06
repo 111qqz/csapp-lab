@@ -78,6 +78,8 @@ static void *coalesce(void *bp);
 static void printblock(void *bp);
 static void checkheap(int verbose);
 static void checkblock(void *bp);
+// 检查当前block和下一个block是否重叠
+static void checkoverlap(void *bp, void *nxt_bp);
 
 /*
  * mm_init - Initialize the memory manager
@@ -369,6 +371,18 @@ static void checkblock(void *bp) {
   if ((size_t)bp % 8) printf("Error: %p is not doubleword aligned\n", bp);
   if (GET(HDRP(bp)) != GET(FTRP(bp)))
     printf("Error: header does not match footer\n");
+  // to do:？ 检查倒数第二位和第三位bit是否是0.
+  // 这两位的含义是什么。。是否有保证？怎么检查有效块呢。。只看allocate一个bit
+  // 似乎不太行
+}
+
+static void checkoverlap(void *bp, void *nxt) {
+  // [begin,end), 左闭右开区间
+  void *cur_end = FTRP(bp) + WSIZE;
+  void *nxt_begin = HDRP(nxt);
+  if (cur_end > nxt_begin) {
+    printf("blocks overlap cur_end: %p  nxt_begin:%p \n", cur_end, nxt_begin);
+  }
 }
 
 /*
@@ -379,6 +393,7 @@ void checkheap(int verbose) {
   char *bp = heap_listp;
 
   if (verbose) printf("Heap (%p):\n", heap_listp);
+
   // prologue block 双字大小(8字节)，并且是allocate的状态。
   // 这里只检查了header，因为checkblock中检查了header和footer的一致性（指内容完全一致)
   if ((GET_SIZE(HDRP(heap_listp)) != DSIZE) || !GET_ALLOC(HDRP(heap_listp)))
@@ -393,6 +408,8 @@ void checkheap(int verbose) {
   for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
     if (verbose) printblock(bp);
     checkblock(bp);
+
+    // 检查是否有没合并的free block
     int alloc = GET_ALLOC(HDRP(bp));
     if (!alloc) {
       free_block_cnt++;
@@ -407,6 +424,10 @@ void checkheap(int verbose) {
     } else {
       free_block_cnt = 0;
     }
+
+    // check (allocated) blocks overlap
+    // 查看当前block的footer地址是否小于下一个block的header地址
+    checkoverlap(bp, NEXT_BLKP(bp));
   }
 
   if (verbose) printblock(bp);
