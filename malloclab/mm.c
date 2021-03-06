@@ -101,6 +101,7 @@ int mm_init(void) {
 
   /* Extend the empty heap with a free block of CHUNKSIZE bytes */
   if (extend_heap(CHUNKSIZE / WSIZE) == NULL) return -1;
+  //   checkheap(1);
   return 0;
 }
 /* $end mminit */
@@ -140,6 +141,8 @@ void *mm_malloc(size_t size) {
   if ((bp = extend_heap(extendsize / WSIZE)) == NULL)
     return NULL;     // line:vm:mm:growheap2
   place(bp, asize);  // line:vm:mm:growheap3
+  mm_checkheap(0);
+
   return bp;
 }
 /* $end mmmalloc */
@@ -372,17 +375,38 @@ static void checkblock(void *bp) {
  * checkheap - Minimal check of the heap for consistency
  */
 void checkheap(int verbose) {
+  printf("in checkheap verbose:%d\n", verbose);
   char *bp = heap_listp;
 
   if (verbose) printf("Heap (%p):\n", heap_listp);
-
+  // prologue block 双字大小(8字节)，并且是allocate的状态。
+  // 这里只检查了header，因为checkblock中检查了header和footer的一致性（指内容完全一致)
   if ((GET_SIZE(HDRP(heap_listp)) != DSIZE) || !GET_ALLOC(HDRP(heap_listp)))
     printf("Bad prologue header\n");
   checkblock(heap_listp);
 
+  //连续空闲块的个数，遇到非free的清零，如果值大于等于2，说明有块躲过了合并
+  int free_block_cnt = 0;
+
+  // 遍历所有block. 除了epilogue
+  // block,所有block不管是allocate还是free,size都是大于0的
   for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
     if (verbose) printblock(bp);
     checkblock(bp);
+    int alloc = GET_ALLOC(HDRP(bp));
+    if (!alloc) {
+      free_block_cnt++;
+      if (free_block_cnt >= 2) {
+        printf("contiguous free blocks that somehow escaped coalescing\n");
+        if (verbose) {
+          // 打印当前Block和上一个block
+          printblock(bp);
+          printblock(PREV_BLKP(bp));
+        }
+      }
+    } else {
+      free_block_cnt = 0;
+    }
   }
 
   if (verbose) printblock(bp);
