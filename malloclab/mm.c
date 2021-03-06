@@ -43,6 +43,8 @@ team_t team = {
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
 /* Pack a size and allocated bit into a word */
+// 因为size 是8的倍数，最小是8，那么最后3个bit只能是001或者00.
+// 如果倒数第二位和第三位bit不是00，那么一定无效
 #define PACK(size, alloc) ((size) | (alloc))  // line:vm:mm:pack
 
 /* Read and write a word at address p */
@@ -52,6 +54,7 @@ team_t team = {
 /* Read the size and allocated fields from address p */
 #define GET_SIZE(p) (GET(p) & ~0x7)  // line:vm:mm:getsize
 #define GET_ALLOC(p) (GET(p) & 0x1)  // line:vm:mm:getalloc
+#define GET_LAST_THREE_BIT(p) (GET(p) & 0x7)
 
 /* Given block ptr bp, compute address of its header and footer */
 #define HDRP(bp) ((char *)(bp)-WSIZE)                         // line:vm:mm:hdrp
@@ -371,9 +374,12 @@ static void checkblock(void *bp) {
   if ((size_t)bp % 8) printf("Error: %p is not doubleword aligned\n", bp);
   if (GET(HDRP(bp)) != GET(FTRP(bp)))
     printf("Error: header does not match footer\n");
-  // to do:？ 检查倒数第二位和第三位bit是否是0.
-  // 这两位的含义是什么。。是否有保证？怎么检查有效块呢。。只看allocate一个bit
-  // 似乎不太行
+  // check last 3 bit: 001 or 000
+  int last_three_bit_value = GET_LAST_THREE_BIT(GET(HDRP(bp));
+  if (last_three_bit_value!=0&&last_three_bit_value!=1){
+    printf("ERROR:invalid blocks bp:%p\n", bp);
+      
+  }
 }
 
 static void checkoverlap(void *bp, void *nxt) {
@@ -381,7 +387,8 @@ static void checkoverlap(void *bp, void *nxt) {
   void *cur_end = FTRP(bp) + WSIZE;
   void *nxt_begin = HDRP(nxt);
   if (cur_end > nxt_begin) {
-    printf("blocks overlap cur_end: %p  nxt_begin:%p \n", cur_end, nxt_begin);
+    printf("ERROR: blocks overlap cur_end: %p  nxt_begin:%p \n", cur_end,
+           nxt_begin);
   }
 }
 
