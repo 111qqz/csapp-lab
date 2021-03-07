@@ -375,10 +375,10 @@ static void checkblock(void *bp) {
   if (GET(HDRP(bp)) != GET(FTRP(bp)))
     printf("Error: header does not match footer\n");
   // check last 3 bit: 001 or 000
-  int last_three_bit_value = GET_LAST_THREE_BIT(GET(HDRP(bp));
-  if (last_three_bit_value!=0&&last_three_bit_value!=1){
+  int last_three_bit_value = GET_LAST_THREE_BIT(HDRP(bp));
+  printf("last three bit value:%d\n", last_three_bit_value);
+  if (last_three_bit_value != 0 && last_three_bit_value != 1) {
     printf("ERROR:invalid blocks bp:%p\n", bp);
-      
   }
 }
 
