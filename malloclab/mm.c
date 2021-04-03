@@ -23,7 +23,6 @@
 // for debug purpose
 #define print(a, args...) \
   printf("%s(%s:%d) " a, __func__, __FILE__, __LINE__, ##args)
-// #define print(args...)
 
 /*********************************************************
  * NOTE TO STUDENTS: Before you do anything else, please
@@ -35,7 +34,7 @@ team_t team = {
     /* First member's full name */
     "111qqz",
     /* First member's email address */
-    "hust.111qqz",
+    "hust.111qqz@gmail.com",
     /* Second member's full name (leave blank if none) */
     "",
     /* Second member's email address (leave blank if none) */
@@ -113,11 +112,8 @@ static char *free_list_start = 0;
  * mm_init - initialize the malloc package.
  */
 int mm_init(void) {
-  // print("-------------------------mm_init begin-----------------\n");
   if ((heap_listp = mem_sbrk(8 * WSIZE)) == NULL)  // line:vm:mm:begininit
     return -1;
-  // print("--- heap_listp first:%p\n", heap_listp);
-  //
   // 序言快很重要的一点是, HDRP和FTPR中间没有payload,
   //     这其实意味着，可以把footer当成bp,
   //     往前4个字节就是header
@@ -135,9 +131,6 @@ int mm_init(void) {
 
   free_list_start = heap_listp + 2 * WSIZE;
   if (extend_heap(CHUNKSIZE / WSIZE) == NULL) return -1;
-  // print("mm_init finish with heap_listp[%p]  free_list_start[%p]\n",
-  //  heap_listp, free_list_start);
-  // print("------------------------mm_init end-------------------\n");
   return 0;
 }
 
@@ -155,8 +148,6 @@ static void *extend_heap(size_t words) {
     size = 16;
   }
   if ((long)(bp = mem_sbrk(size)) == NULL) return NULL;
-
-  // print("size in extend_heap:%d\n", size);
 
   /* Initialize free block header/footer and the epilogue header */
 
@@ -181,21 +172,17 @@ static void *extend_heap(size_t words) {
  */
 void *mm_malloc(size_t size) {
   // ignore
-  // print("malloc begin of size:[%d] free_list_start:[%p]\n", size,
-  //        free_list_start);
   if (size == 0) return NULL;
   // adjusted block size
   size_t asize = size <= DSIZE
                      ? 2 * DSIZE
                      : DSIZE * ((size + (DSIZE) + (DSIZE - 1)) / DSIZE);
-  // print("malloc ajust size:%d\n", asize);
   char *bp;
   if ((bp = find_fit(asize)) != NULL) {
     // print("find a free block suitable for size[%d]\n", asize);
     place(bp, asize);
     return bp;
   }
-  // print("cannot find a free block suitable for [%d]\n", asize);
 
   size_t extend_size = MAX(asize, CHUNKSIZE);
   if ((bp = extend_heap(extend_size / WSIZE)) == NULL) return NULL;
@@ -205,23 +192,8 @@ void *mm_malloc(size_t size) {
 
 // 合并连续的free block
 static void *coalesce(void *bp) {
-  // print("in coalesce with bp:[%p]\n", bp);
-  // print("heap_listp:%p\n", heap_listp);
-  // print("free_list_start:%p\n", free_list_start);
-  // // core的原因是 PREV_BLK(bp)得到的地址是 0xfff65640，， 这个地址应该kernel
-  // // space了。。读写显然会发生core
-  // // 这个size堪称地址是
-  // // 0xf621b9d8，还挺合理的。。是不是哪里不小心把地址以为成size了？
-  // print("GET_SIZE(HDRP(bp)):%p\n", GET_SIZE(HDRP(bp) - WSIZE));
-  // // footer 的size不太对呀。。怎么感觉是个垃圾数
-  // print("GET_SIZE((void *)(bp)-DSIZE) %d\n", GET_SIZE((void *)(bp)-DSIZE));
-  // print("PREV_BLK(bp):%p\n", PREV_BLK(bp));
-  // print("FTRP(PREV_BLK(bp))\n", FTRP(PREV_BLK(bp)));
-
   size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLK(bp))) || PREV_BLK(bp) == bp;
-  // print("prev_alloc:%d\n", prev_alloc);
   size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLK(bp)));
-  // print("next_alloc:%d\n", next_alloc);
   size_t size = GET_SIZE(HDRP(bp));
   // print("pre_alloc:[%d] next_alloc:[%d] size:[%d]\n", prev_alloc, next_alloc,
   // size);
@@ -269,28 +241,17 @@ static void *coalesce(void *bp) {
 static void *find_fit(size_t asize) {
   // print("find fit begin of size[%d]\n", asize);
   void *bp;
-  // 显示列表中非常重要的一点是，
   for (bp = free_list_start; GET_ALLOC(HDRP(bp)) == 0; bp = GET_NEXT_PTR(bp)) {
-    // print("in find_fit for loop, cur bp:[%p] HDRP(bp):[%p]\n", bp,
-    // HDRP(bp)); print("GET_SIZE(HDRP(%p)):[%d]\n", bp, GET_SIZE(HDRP(bp)));
-    // print("GXT_NXT_PTR(%p):[%p]\n", bp, GET_NEXT_PTR(bp));
-    // print("---next block: alloc:%d  size:%d ------\n",
-    //  GET_ALLOC(HDRP(GET_NEXT_PTR(bp))), GET_SIZE(HDRP(GET_NEXT_PTR(bp))));
     if ((asize <= GET_SIZE(HDRP(bp)))) {
-      // print("find suitable free block[%p] for size[%d]\n", bp, asize);
-      // print("GET_SIZE(HDRP(bp))):%d\n", GET_SIZE(HDRP(bp)));
       return bp;
     }
-    // print("in find_fit for loop end if\n");
   }
-  // print("cannot find any free block in find_fit\n");
 
   return NULL;
 }
 
 // place block
 static void place(void *bp, size_t asize) {
-  // print("place begin at %p\n", bp);
   // csize是这个free block的大小
   // asize是这次malloc需要的大小。 rsize(r means "remain")就是剩下的大小
   // 逻辑是，如果剩下的比较多，避免浪费就进行拆分，否则不进行拆分
@@ -306,13 +267,11 @@ static void place(void *bp, size_t asize) {
     bp = coalesce(bp);
     insert_node_in_free_list(bp);
 
-    // insert_node_in_free_list(bp);
   } else {
     PUT(HDRP(bp), PACK(csize, 1));
     PUT(FTRP(bp), PACK(csize, 1));
     remove_node_from_free_list(bp);
   }
-  // print("place end \n");
 }
 
 /*
@@ -321,50 +280,63 @@ static void place(void *bp, size_t asize) {
 void mm_free(void *bp) {
   if (bp == NULL) return;
   size_t size = GET_SIZE(HDRP(bp));
-  // print("size in mm_free :%d\n", size);
   PUT(HDRP(bp), PACK(size, 0));
   PUT(FTRP(bp), PACK(size, 0));
   bp = coalesce(bp);
-  // print("before insert_node_in_free_list in mm_free :[%p]\n", bp);
   insert_node_in_free_list(bp);
 }
 
 /*
- * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
+ * mm_realloc - 借鉴了 https://github.com/HarshTrivedi/malloc
  */
-void *mm_realloc(void *ptr, size_t size) {
-  void *oldptr = ptr;
-  void *newptr;
-  size_t copySize;
-
-  newptr = mm_malloc(size);
-  if (newptr == NULL) return NULL;
-  copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-  if (size < copySize) copySize = size;
-  memcpy(newptr, oldptr, copySize);
-  mm_free(oldptr);
-  return newptr;
+void *mm_realloc(void *bp, size_t size) {
+  if (bp == NULL) {
+    return mm_malloc(size);
+  }
+  if (size == 0) {
+    mm_free(bp);
+    return NULL;
+  }
+  size_t oldsize = GET_SIZE(HDRP(bp));
+  size_t newsize = size + 2 * WSIZE;  // 2 words for header and footer
+  /*if newsize is less than oldsize then we just return bp */
+  if (newsize <= oldsize) {
+    return bp;
+  }
+  /*if newsize is greater than oldsize */
+  else {
+    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLK(bp)));
+    size_t csize;
+    /* next block is free and the size of the two blocks is greater than or
+     * equal the new size  */
+    /* then we only need to combine both the blocks  */
+    if (!next_alloc &&
+        ((csize = oldsize + GET_SIZE(HDRP(NEXT_BLK(bp))))) >= newsize) {
+      remove_node_from_free_list(NEXT_BLK(bp));
+      PUT(HDRP(bp), PACK(csize, 1));
+      PUT(FTRP(bp), PACK(csize, 1));
+      return bp;
+    } else {
+      void *new_ptr = mm_malloc(newsize);
+      place(new_ptr, newsize);
+      memcpy(new_ptr, bp, newsize);
+      mm_free(bp);
+      return new_ptr;
+    }
+  }
+  return NULL;
 }
 
 // remove node in free list
 // a->b->c ，remove b的做法是，将a->next指向c,c->prev 指向a
 // 特殊情况: bp是free list的初始节点，此时直接调整free_list_start
 static void remove_node_from_free_list(void *bp) {
-  // print("--------- remove node begin---------------- bp:[%p]\n", bp);
-  // print("--------GET_NEXT_PTR(bp):[%p]----------\n", GET_NEXT_PTR(bp));
   if (GET_PREV_PTR(bp)) {
     SET_NEXT_PTR(GET_PREV_PTR(bp), GET_NEXT_PTR(bp));
   } else {
     free_list_start = GET_NEXT_PTR(bp);
   }
-  // print("------------ remove node set next pointer ----------------\n");
-  // print("bp:[%p]\n", bp);
-  // bp 的next 是null了
-  // if (GET_NEXT_PTR(bp)) {
-  // print("GET_NEXT_PTR(bp)[%p]\n", GET_NEXT_PTR(bp));
   SET_PREV_PTR(GET_NEXT_PTR(bp), GET_PREV_PTR(bp));
-  // }
-  // print("------------ remove node set pre pointer -----------------\n");
 }
 
 // 向free list中插入node
@@ -377,8 +349,6 @@ static void remove_node_from_free_list(void *bp) {
 // free_list_start = a
 
 static void insert_node_in_free_list(void *bp) {
-  // print("-------- insert_node_in_free_list bp:%p free_list_start:%p\n", bp,
-  //  free_list_start);
   SET_NEXT_PTR(bp, free_list_start);
   SET_PREV_PTR(free_list_start, bp);
   SET_PREV_PTR(bp, NULL);
