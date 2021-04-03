@@ -12,12 +12,18 @@
 #include "mm.h"
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "memlib.h"
+
+// for debug purpose
+#define print(a, args...) \
+  printf("%s(%s:%d) " a, __func__, __FILE__, __LINE__, ##args)
+// #define print(args...)
 
 /*********************************************************
  * NOTE TO STUDENTS: Before you do anything else, please
@@ -61,26 +67,34 @@ team_t team = {
 #define PUT(p, val) (*(unsigned int *)(p) = (val))  // line:vm:mm:put
 
 /* Read the size and allocated fields from address p */
-#define GET_SIZE(p) (GET(p) & ~0x7)  // line:vm:mm:getsize
+// #define GET_SIZE(p) (GET(p) & ~0x7)  // line:vm:mm:getsize
+#define GET_SIZE(p) (GET(p) & ~(DSIZE - 1))
 #define GET_ALLOC(p) (GET(p) & 0x1)  // line:vm:mm:getalloc
 #define GET_LAST_THREE_BIT(p) (GET(p) & 0x7)
 
+// bp might means "base pointer",是一个block中有效载荷的起始位置
 /* Given block ptr bp, compute address of its header and footer */
-// 一种值得提的特殊情况是。。对于序言快。。footer可以看作是bp,因为footer往前WSIZE也恰好是header
-#define HDRP(bp) ((char *)(bp)-WSIZE)                         // line:vm:mm:hdrp
-#define FTRP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)  // line:vm:mm:ftrp
+//
+// 一种值得提的特殊情况是。。对于序言快。。footer可以看作是bp,
+// 因为footer往前WSIZE也恰好是header
+#define HDRP(bp) ((char *)(bp)-WSIZE)  //
+#define FTRP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
+// line:vm:mm:ftrp
 
-/* Given block ptr bp, compute address of next and previous blocks */
 #define NEXT_BLK(bp) ((void *)(bp) + GET_SIZE(HDRP(bp)))
 #define PREV_BLK(bp) ((void *)(bp)-GET_SIZE((void *)(bp)-DSIZE))
 
-// 用于explict free list
-// 需要注意GET_PRE_PTR得到不是pre 在free bliok中的地址，而是这个地址中的值
-#define GET_PRE_PTR(bp) (*(char **)(bp))
-#define GET_NXT_PTR(bp) (*(char **)(bp + WSIZE))
+/* Given block ptr bp, compute address of next and previous blocks */
 
-#define SET_NXT_PTR(bp, addr) (GET_NXT_PTR(bp) = addr)
-#define SET_PRE_PTR(bp, addr) (GET_PRE_PTR(bp) = addr)
+// explict free list的想法是，对于每一个free block，存放上一个free
+// block的地址和下一个free block的地址在payload中(因为free
+// block的payload反正也没有被使用) 用于explict free list
+// 需要注意GET_PREV_PTR得到不是pre 在free bliok中的地址，而是这个地址中的值
+#define GET_PREV_PTR(bp) (*(char **)(bp))
+#define GET_NEXT_PTR(bp) (*(char **)(bp + WSIZE))
+
+#define SET_NEXT_PTR(bp, addr) (GET_NEXT_PTR(bp) = addr)
+#define SET_PREV_PTR(bp, addr) (GET_PREV_PTR(bp) = addr)
 
 /* Function prototypes for internal helper routines */
 static void *extend_heap(size_t words);
@@ -88,7 +102,7 @@ static void place(void *bp, size_t asize);
 static void *find_fit(size_t asize);
 static void *coalesce(void *bp);
 
-static void remove_node_in_free_list(void *bp);
+static void remove_node_from_free_list(void *bp);
 static void insert_node_in_free_list(void *bp);
 
 // 定义一些global 的var
@@ -99,15 +113,20 @@ static char *free_list_start = 0;
  * mm_init - initialize the malloc package.
  */
 int mm_init(void) {
-  printf("-------------------------mm_init begin-----------------\n");
-  if ((heap_listp = mem_sbrk(4 * WSIZE)) == (void *)-1)  // line:vm:mm:begininit
+  // print("-------------------------mm_init begin-----------------\n");
+  if ((heap_listp = mem_sbrk(8 * WSIZE)) == NULL)  // line:vm:mm:begininit
     return -1;
-  printf("--- heap_listp first:%p\n", heap_listp);
-  // 序言快很重要的一点是,HDRP和FTPR中间没有payload,这其实意味着，可以把footer当成bp,往前4个字节就是header
+  // print("--- heap_listp first:%p\n", heap_listp);
+  //
+  // 序言快很重要的一点是, HDRP和FTPR中间没有payload,
+  //     这其实意味着，可以把footer当成bp,
+  //     往前4个字节就是header
   // 因此把free_list_start
-  // 放在序言快的footer的部分，作为一个结尾标志。判断条件可以统一成SIZE(HEAD(bp))=0
-  // 这里是个挺巧妙的做法。
+  //
+  // 放在序言快的footer的部分，作为一个结尾标志。判断条件可以统一成SIZE(HEAD(bp))
+  // = 0 这里是个挺巧妙的做法。
   // 以及，由于是头插，其实free_list_start更合适的叫法是free_list_end?
+
   // 保留开头和结尾块的设计，方便合并 的时候处理corner case
   PUT(heap_listp, 0);                            /* Alignment padding */
   PUT(heap_listp + (1 * WSIZE), PACK(DSIZE, 1)); /* Prologue header */
@@ -116,27 +135,28 @@ int mm_init(void) {
 
   free_list_start = heap_listp + 2 * WSIZE;
   if (extend_heap(CHUNKSIZE / WSIZE) == NULL) return -1;
-  printf("mm_init finish with heap_listp[%p]  free_list_start[%p]\n",
-         heap_listp, free_list_start);
-  printf("------------------------mm_init end-------------------\n");
+  // print("mm_init finish with heap_listp[%p]  free_list_start[%p]\n",
+  //  heap_listp, free_list_start);
+  // print("------------------------mm_init end-------------------\n");
   return 0;
 }
 
 // 每次扩展words个字的内存，一个字是4
 // byte,也就是扩展words*4的Byte内存，words向上对偶数取整
 static void *extend_heap(size_t words) {
-  printf("in extend_heap function\n");
+  // print("in extend_heap function\n");
   char *bp;
   size_t size;
 
   /* Allocate an even number of words to maintain alignment */
   size = (words % 2) ? (words + 1) * WSIZE
-                     : words * WSIZE;                  // line:vm:mm:beginextend
-  if ((long)(bp = mem_sbrk(size)) == -1) return NULL;  // line:vm:mm:endextend
-  // if (size < 16) {
-  //   size = 16;
-  // }
-  printf("size in extend_heap:%d\n", size);
+                     : words * WSIZE;  // line:vm:mm:beginextend
+  if (size < 16) {
+    size = 16;
+  }
+  if ((long)(bp = mem_sbrk(size)) == NULL) return NULL;
+
+  // print("size in extend_heap:%d\n", size);
 
   /* Initialize free block header/footer and the epilogue header */
 
@@ -145,6 +165,7 @@ static void *extend_heap(size_t words) {
   PUT(FTRP(bp), PACK(size, 0));
   /* Free block footer */  // line:vm:mm:freeblockftr
   PUT(HDRP(NEXT_BLK(bp)), PACK(0, 1));
+  // PUT(FTRP(NEXT_BLK(bp)), PACK(0, 1));
   /* New epilogue header */  // line:vm:mm:newepihdr
 
   /* Coalesce if the previous block was free */
@@ -160,21 +181,21 @@ static void *extend_heap(size_t words) {
  */
 void *mm_malloc(size_t size) {
   // ignore
-  printf("malloc begin of size:[%d] free_list_start:[%p]\n", size,
-         free_list_start);
+  // print("malloc begin of size:[%d] free_list_start:[%p]\n", size,
+  //        free_list_start);
   if (size == 0) return NULL;
   // adjusted block size
   size_t asize = size <= DSIZE
                      ? 2 * DSIZE
                      : DSIZE * ((size + (DSIZE) + (DSIZE - 1)) / DSIZE);
-  printf("malloc ajust size:%d\n", asize);
+  // print("malloc ajust size:%d\n", asize);
   char *bp;
   if ((bp = find_fit(asize)) != NULL) {
-    printf("find a free block suitable for size[%d]\n", asize);
+    // print("find a free block suitable for size[%d]\n", asize);
     place(bp, asize);
     return bp;
   }
-  printf("cannot find a free block suitable for [%d]\n", asize);
+  // print("cannot find a free block suitable for [%d]\n", asize);
 
   size_t extend_size = MAX(asize, CHUNKSIZE);
   if ((bp = extend_heap(extend_size / WSIZE)) == NULL) return NULL;
@@ -184,10 +205,26 @@ void *mm_malloc(size_t size) {
 
 // 合并连续的free block
 static void *coalesce(void *bp) {
-  size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLK(bp)));
-  size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLK(bp)));
-  size_t size = GET_SIZE(HDRP(bp));
+  // print("in coalesce with bp:[%p]\n", bp);
+  // print("heap_listp:%p\n", heap_listp);
+  // print("free_list_start:%p\n", free_list_start);
+  // // core的原因是 PREV_BLK(bp)得到的地址是 0xfff65640，， 这个地址应该kernel
+  // // space了。。读写显然会发生core
+  // // 这个size堪称地址是
+  // // 0xf621b9d8，还挺合理的。。是不是哪里不小心把地址以为成size了？
+  // print("GET_SIZE(HDRP(bp)):%p\n", GET_SIZE(HDRP(bp) - WSIZE));
+  // // footer 的size不太对呀。。怎么感觉是个垃圾数
+  // print("GET_SIZE((void *)(bp)-DSIZE) %d\n", GET_SIZE((void *)(bp)-DSIZE));
+  // print("PREV_BLK(bp):%p\n", PREV_BLK(bp));
+  // print("FTRP(PREV_BLK(bp))\n", FTRP(PREV_BLK(bp)));
 
+  size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLK(bp))) || PREV_BLK(bp) == bp;
+  // print("prev_alloc:%d\n", prev_alloc);
+  size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLK(bp)));
+  // print("next_alloc:%d\n", next_alloc);
+  size_t size = GET_SIZE(HDRP(bp));
+  // print("pre_alloc:[%d] next_alloc:[%d] size:[%d]\n", prev_alloc, next_alloc,
+  // size);
   if (prev_alloc && next_alloc) {
     return bp;
   }
@@ -195,7 +232,7 @@ static void *coalesce(void *bp) {
   if (prev_alloc && !next_alloc) {
     size += GET_SIZE(HDRP(NEXT_BLK(bp)));
     // 下一块和当前合并了，在free list中变成一个node,因此删除下一块
-    remove_node_in_free_list(NEXT_BLK(bp));
+    remove_node_from_free_list(NEXT_BLK(bp));
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
 
@@ -206,7 +243,7 @@ static void *coalesce(void *bp) {
     size += GET_SIZE(HDRP(PREV_BLK(bp)));
     bp = PREV_BLK(bp);
     // 删除的是pre,之后再插入的是prev+cur. 虽然地址是一样的
-    remove_node_in_free_list(bp);
+    remove_node_from_free_list(bp);
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
 
@@ -215,72 +252,82 @@ static void *coalesce(void *bp) {
 
   if (!prev_alloc && !next_alloc) {
     size += GET_SIZE(HDRP(NEXT_BLK(bp))) + GET_SIZE(HDRP(PREV_BLK(bp)));
-    remove_node_in_free_list(PREV_BLK(bp));
-    remove_node_in_free_list(NEXT_BLK(bp));
+    remove_node_from_free_list(PREV_BLK(bp));
+    remove_node_from_free_list(NEXT_BLK(bp));
     bp = PREV_BLK(bp);
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
 
     return bp;
   }
+  print("never run here\n");
   return NULL;
 }
 
 // Place block of asize bytes at start of free block bp
 // no split now
 static void *find_fit(size_t asize) {
-  printf("find fit begin of size[%d]\n", asize);
+  // print("find fit begin of size[%d]\n", asize);
   void *bp;
   // 显示列表中非常重要的一点是，
-  for (bp = free_list_start; GET_ALLOC(HDRP(bp)) == 0; bp = GET_NXT_PTR(bp)) {
-    // printf("in find_fit for loop, cur bp:[%p] HDRP(bp):[%p]\n", bp,
-    // HDRP(bp)); printf("GET_SIZE(HDRP(%p)):[%d]\n", bp, GET_SIZE(HDRP(bp)));
-    // printf("GXT_NXT_PTR(%p):[%p]\n", bp, GET_NXT_PTR(bp));
-    // printf("---next block: alloc:%d  size:%d ------\n",
-    //  GET_ALLOC(HDRP(GET_NXT_PTR(bp))), GET_SIZE(HDRP(GET_NXT_PTR(bp))));
-    if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
-      printf("find suitable free block[%p] for size[%d]\n", bp, asize);
-      // printf("GET_SIZE(HDRP(bp))):%d\n", GET_SIZE(HDRP(bp)));
+  for (bp = free_list_start; GET_ALLOC(HDRP(bp)) == 0; bp = GET_NEXT_PTR(bp)) {
+    // print("in find_fit for loop, cur bp:[%p] HDRP(bp):[%p]\n", bp,
+    // HDRP(bp)); print("GET_SIZE(HDRP(%p)):[%d]\n", bp, GET_SIZE(HDRP(bp)));
+    // print("GXT_NXT_PTR(%p):[%p]\n", bp, GET_NEXT_PTR(bp));
+    // print("---next block: alloc:%d  size:%d ------\n",
+    //  GET_ALLOC(HDRP(GET_NEXT_PTR(bp))), GET_SIZE(HDRP(GET_NEXT_PTR(bp))));
+    if ((asize <= GET_SIZE(HDRP(bp)))) {
+      // print("find suitable free block[%p] for size[%d]\n", bp, asize);
+      // print("GET_SIZE(HDRP(bp))):%d\n", GET_SIZE(HDRP(bp)));
       return bp;
     }
-    printf("in find_fit for loop end if\n");
+    // print("in find_fit for loop end if\n");
   }
-  printf("cannot find any free block in find_fit\n");
+  // print("cannot find any free block in find_fit\n");
 
   return NULL;
 }
 
 // place block
 static void place(void *bp, size_t asize) {
-  // printf("place begin at %p\n", bp);
+  // print("place begin at %p\n", bp);
   // csize是这个free block的大小
-  // asize是这次malloc需要的大小。 rsize(remain size)就是剩下的大小
+  // asize是这次malloc需要的大小。 rsize(r means "remain")就是剩下的大小
   // 逻辑是，如果剩下的比较多，避免浪费就进行拆分，否则不进行拆分
   size_t csize = GET_SIZE(HDRP(bp));
   size_t rsize = csize - asize;
   if (rsize >= (2 * DSIZE)) {
     PUT(HDRP(bp), PACK(asize, 1));
     PUT(FTRP(bp), PACK(asize, 1));
-    remove_node_in_free_list(bp);
+    remove_node_from_free_list(bp);
     bp = NEXT_BLK(bp);
     PUT(HDRP(bp), PACK(rsize, 0));
     PUT(FTRP(bp), PACK(rsize, 0));
-    // bp = coalesce(bp);
+    bp = coalesce(bp);
     insert_node_in_free_list(bp);
 
     // insert_node_in_free_list(bp);
   } else {
     PUT(HDRP(bp), PACK(csize, 1));
     PUT(FTRP(bp), PACK(csize, 1));
-    remove_node_in_free_list(bp);
+    remove_node_from_free_list(bp);
   }
-  // printf("place end \n");
+  // print("place end \n");
 }
 
 /*
  * mm_free - Freeing a block does nothing.
  */
-void mm_free(void *ptr) { printf("mm free begin\n"); }
+void mm_free(void *bp) {
+  if (bp == NULL) return;
+  size_t size = GET_SIZE(HDRP(bp));
+  // print("size in mm_free :%d\n", size);
+  PUT(HDRP(bp), PACK(size, 0));
+  PUT(FTRP(bp), PACK(size, 0));
+  bp = coalesce(bp);
+  // print("before insert_node_in_free_list in mm_free :[%p]\n", bp);
+  insert_node_in_free_list(bp);
+}
 
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
@@ -300,24 +347,24 @@ void *mm_realloc(void *ptr, size_t size) {
 }
 
 // remove node in free list
-// a->b->c ，remove b的做法是，将a->next指向c,c->prev 执行a
+// a->b->c ，remove b的做法是，将a->next指向c,c->prev 指向a
 // 特殊情况: bp是free list的初始节点，此时直接调整free_list_start
-static void remove_node_in_free_list(void *bp) {
-  // printf("--------- remove node begin---------------- bp:[%p]\n", bp);
-  // printf("--------GET_NXT_PTR(bp):[%p]----------\n", GET_NXT_PTR(bp));
-  if (GET_PRE_PTR(bp)) {
-    SET_NXT_PTR(GET_PRE_PTR(bp), GET_NXT_PTR(bp));
+static void remove_node_from_free_list(void *bp) {
+  // print("--------- remove node begin---------------- bp:[%p]\n", bp);
+  // print("--------GET_NEXT_PTR(bp):[%p]----------\n", GET_NEXT_PTR(bp));
+  if (GET_PREV_PTR(bp)) {
+    SET_NEXT_PTR(GET_PREV_PTR(bp), GET_NEXT_PTR(bp));
   } else {
-    free_list_start = GET_NXT_PTR(bp);
+    free_list_start = GET_NEXT_PTR(bp);
   }
-  printf("------------ remove node set next pointer ----------------\n");
-  printf("bp:[%p]\n", bp);
+  // print("------------ remove node set next pointer ----------------\n");
+  // print("bp:[%p]\n", bp);
   // bp 的next 是null了
-  // if (GET_NXT_PTR(bp)) {
-  printf("GET_NXT_PTR(bp)[%p]\n", GET_NXT_PTR(bp));
-  SET_PRE_PTR(GET_NXT_PTR(bp), GET_PRE_PTR(bp));
+  // if (GET_NEXT_PTR(bp)) {
+  // print("GET_NEXT_PTR(bp)[%p]\n", GET_NEXT_PTR(bp));
+  SET_PREV_PTR(GET_NEXT_PTR(bp), GET_PREV_PTR(bp));
   // }
-  printf("------------ remove node set pre pointer -----------------\n");
+  // print("------------ remove node set pre pointer -----------------\n");
 }
 
 // 向free list中插入node
@@ -330,10 +377,10 @@ static void remove_node_in_free_list(void *bp) {
 // free_list_start = a
 
 static void insert_node_in_free_list(void *bp) {
-  printf("-------- insert_node_in_free_list bp:%p free_list_start:%p\n", bp,
-         free_list_start);
-  SET_NXT_PTR(bp, free_list_start);
-  SET_PRE_PTR(bp, NULL);
-  SET_PRE_PTR(free_list_start, bp);
+  // print("-------- insert_node_in_free_list bp:%p free_list_start:%p\n", bp,
+  //  free_list_start);
+  SET_NEXT_PTR(bp, free_list_start);
+  SET_PREV_PTR(free_list_start, bp);
+  SET_PREV_PTR(bp, NULL);
   free_list_start = bp;
 }
