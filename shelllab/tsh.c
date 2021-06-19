@@ -151,6 +151,16 @@ int main(int argc, char** argv) {
 }
 
 /*
+ * error-handing wrapper for the fork function
+ */
+pid_t Fork(void) {
+	pid_t pid;
+	if ((pid = fork()) < 0) {
+		unix_error("Fork error");
+	}
+	return pid;
+}
+/*
  * eval - Evaluate the command line that the user has just typed in
  *
  * If the user has requested a built-in command (quit, jobs, bg or fg)
@@ -162,6 +172,22 @@ int main(int argc, char** argv) {
  * when we type ctrl-c (ctrl-z) at the keyboard.
  */
 void eval(char* cmdline) {
+	char* parsed_args[MAXARGS];
+	int bg = parseline(cmdline, &parsed_args[0]);
+	int i = 0;
+	for (i = 0; parsed_args[i] != NULL; i++) {
+		// check parsing
+		printf("%s\n", parsed_args[i]);
+	}
+
+	if (builtin_cmd(parsed_args) == 0) {
+		pid_t pid;
+		pid = Fork();
+		if (pid == 0) {
+			// child process
+			printf("in child process\n");
+		}
+	}
 	return;
 }
 
@@ -207,6 +233,7 @@ int parseline(const char* cmdline, char** argv) {
 			delim = strchr(buf, ' ');
 		}
 	}
+	// argv ends with NULL
 	argv[argc] = NULL;
 
 	if (argc == 0) /* ignore blank line */
@@ -224,6 +251,17 @@ int parseline(const char* cmdline, char** argv) {
  *    it immediately.
  */
 int builtin_cmd(char** argv) {
+	if (strcmp(*argv, "quit") == 0) {
+		exit(0);
+	}
+	if (strcmp(*argv, "fg") == 0 || strcmp(*argv, "bg") == 0) {
+		do_bgfg(argv);
+		return 1;
+	}
+	if (strcmp(*argv, "jobs") == 0) {
+		listjobs(jobs);
+		return 1;
+	}
 	return 0; /* not a builtin command */
 }
 
@@ -238,6 +276,9 @@ void do_bgfg(char** argv) {
  * waitfg - Block until process pid is no longer the foreground process
  */
 void waitfg(pid_t pid) {
+	// 两种情况:要么执行完了，要么不是fg了
+	// use waitpid?
+
 	return;
 }
 
