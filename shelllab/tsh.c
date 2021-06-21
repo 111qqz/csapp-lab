@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
 
 	exit(0); /* control never reaches here */
 }
-
+// list of error-handing wrapper functions begin
 /*
  * error-handing wrapper for the fork function
  */
@@ -160,6 +160,40 @@ pid_t Fork(void) {
 	}
 	return pid;
 }
+
+void Sigfillset(sigset_t* set) {
+	sigset_t tmp;
+	if (sigfillset(&tmp) < 0) {
+		unix_error("sigfillset errror");
+	}
+	*set = tmp;
+}
+
+void Sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
+	sigset_t old;
+	if (sigprocmask(how, set, &old) < 0) {
+		unix_error("sigprocmask error");
+	}
+	*oldset = old;
+}
+
+void Sigaddset(sigset_t* set, int signum) {
+	sigset_t tmp;
+	if (sigaddset(&tmp, signum) < 0) {
+		unix_error("sigaddset error");
+	}
+	*set = tmp;
+}
+
+void Sigemptyset(sigset_t* set) {
+	sigset_t tmp;
+	if (sigemptyset(&tmp) < 0) {
+		unix_error("sigemptyset error");
+	}
+	*set = tmp;
+}
+
+// list of errorh-handing wrapper functions end
 /*
  * eval - Evaluate the command line that the user has just typed in
  *
@@ -186,25 +220,34 @@ void eval(char* cmdline) {
 		// check parsing
 		// printf("%s\n", parsed_args[i]);
 	}
-
+	sigset_t mask_all, mask_one, prev_one;
+	Sigfillset(&mask_all);
+	Sigemptyset(&mask_one);
+	Sigaddset(&mask_one, SIGCHLD);
+	Signal(SIGCHLD, sigchld_handler);
 	if (builtin_cmd(parsed_args) == 0) {
 		pid_t pid;
+		// block SIGCHLD
+		Sigprocmask(SIG_BLOCK, &mask_one, &prev_one);
 		if ((pid = Fork()) == 0) {
 			// child process
-			// printf("in child process\n");
+			printf("in child process\n");
+			Sigprocmask(SIG_SETMASK, &prev_one,
+				    NULL);  // unblock SIGCHLD
+			setpgid(0, 0);
 			if (execve(parsed_args[0], parsed_args, environ) < 0) {
 				printf("%s: Command not found\n",
 				       parsed_args[0]);
 				exit(0);
 			}
 		}
+		Sigprocmask(SIG_BLOCK, &mask_all, NULL);
+		addjob(jobs, pid, bg ? BG : FG, cmdline);
+		Sigprocmask(SIG_SETMASK, &prev_one, NULL);
 
 		// parent wait child
 		if (!bg) {
-			int status;
-			if (waitpid(pid, &status, 0) < 0) {
-				unix_error("waitfg: waitpid error");
-			}
+			waitfg(pid);
 		} else {
 			printf("%d %s", pid, cmdline);
 		}
@@ -272,6 +315,7 @@ int parseline(const char* cmdline, char** argv) {
  *    it immediately.
  */
 int builtin_cmd(char** argv) {
+	printf("in builtin_cmd\n");
 	if (strcmp(*argv, "quit") == 0) {
 		exit(0);
 	}
@@ -302,6 +346,10 @@ void do_bgfg(char** argv) {
 void waitfg(pid_t pid) {
 	// 两种情况:要么执行完了，要么不是fg了
 	// use waitpid?
+	int status;
+	if (waitpid(pid, &status, 0) < 0) {
+		unix_error("waitfg: waitpid error");
+	}
 
 	return;
 }
@@ -318,7 +366,20 @@ void waitfg(pid_t pid) {
  *     currently running children to terminate.
  */
 void sigchld_handler(int sig) {
-	return;
+	int olderrno = errno;
+	sigset_t mask_all, prev_all;
+	pid_t pid;
+	Sigfillset(&mask_all);
+
+	while ((pid = waitpid(-1, NULL, 0)) > 0) {
+		Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
+		deletejob(jobs, pid);
+		Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+	}
+	if (errno != ECHILD) {
+		unix_error("waitpid error");
+	}
+	errno = olderrno;
 }
 
 /*
