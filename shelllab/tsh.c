@@ -162,6 +162,7 @@ pid_t Fork(void) {
 }
 
 void Sigfillset(sigset_t* set) {
+	if (set == NULL) return;
 	sigset_t tmp;
 	if (sigfillset(&tmp) < 0) {
 		unix_error("sigfillset errror");
@@ -174,10 +175,11 @@ void Sigprocmask(int how, const sigset_t* set, sigset_t* oldset) {
 	if (sigprocmask(how, set, &old) < 0) {
 		unix_error("sigprocmask error");
 	}
-	*oldset = old;
+	if (oldset) *oldset = old;
 }
 
 void Sigaddset(sigset_t* set, int signum) {
+	if (set == NULL) return;
 	sigset_t tmp;
 	if (sigaddset(&tmp, signum) < 0) {
 		unix_error("sigaddset error");
@@ -186,6 +188,7 @@ void Sigaddset(sigset_t* set, int signum) {
 }
 
 void Sigemptyset(sigset_t* set) {
+	if (set == NULL) return;
 	sigset_t tmp;
 	if (sigemptyset(&tmp) < 0) {
 		unix_error("sigemptyset error");
@@ -224,23 +227,26 @@ void eval(char* cmdline) {
 	Sigfillset(&mask_all);
 	Sigemptyset(&mask_one);
 	Sigaddset(&mask_one, SIGCHLD);
-	Signal(SIGCHLD, sigchld_handler);
+
 	if (builtin_cmd(parsed_args) == 0) {
 		pid_t pid;
 		// block SIGCHLD
 		Sigprocmask(SIG_BLOCK, &mask_one, &prev_one);
 		if ((pid = Fork()) == 0) {
 			// child process
-			printf("in child process\n");
+			// printf("in child process\n");
 			Sigprocmask(SIG_SETMASK, &prev_one,
 				    NULL);  // unblock SIGCHLD
+			// printf("before setpgid\n");
 			setpgid(0, 0);
+			// printf("before execve\n");
 			if (execve(parsed_args[0], parsed_args, environ) < 0) {
 				printf("%s: Command not found\n",
 				       parsed_args[0]);
 				exit(0);
 			}
 		}
+		// printf("before add job block all signals\n");
 		Sigprocmask(SIG_BLOCK, &mask_all, NULL);
 		addjob(jobs, pid, bg ? BG : FG, cmdline);
 		Sigprocmask(SIG_SETMASK, &prev_one, NULL);
@@ -315,7 +321,6 @@ int parseline(const char* cmdline, char** argv) {
  *    it immediately.
  */
 int builtin_cmd(char** argv) {
-	printf("in builtin_cmd\n");
 	if (strcmp(*argv, "quit") == 0) {
 		exit(0);
 	}
