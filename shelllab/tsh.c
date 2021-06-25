@@ -21,9 +21,9 @@
 
 /* Job states */
 #define UNDEF 0 /* undefined */
-#define FG 1    /* running in foreground */
-#define BG 2    /* running in background */
-#define ST 3    /* stopped */
+#define FG 1	/* running in foreground */
+#define BG 2	/* running in background */
+#define ST 3	/* stopped */
 
 /*
  * Jobs states: FG (foreground), BG (background), ST (stopped)
@@ -36,16 +36,16 @@
  */
 
 /* Global variables */
-extern char** environ;   /* defined in libc */
+extern char** environ;	 /* defined in libc */
 char prompt[] = "tsh> "; /* command line prompt (DO NOT CHANGE) */
 int verbose = 0;	 /* if true, print additional output */
 int nextjid = 1;	 /* next job ID to allocate */
-char sbuf[MAXLINE];      /* for composing sprintf messages */
+char sbuf[MAXLINE];	 /* for composing sprintf messages */
 
 struct job_t {		       /* The job struct */
-	pid_t pid;	     /* job PID */
+	pid_t pid;	       /* job PID */
 	int jid;	       /* job ID [1, 2, ...] */
-	int state;	     /* UNDEF, BG, FG, or ST */
+	int state;	       /* UNDEF, BG, FG, or ST */
 	char cmdline[MAXLINE]; /* command line */
 };
 struct job_t jobs[MAXJOBS]; /* The job list */
@@ -117,7 +117,7 @@ int main(int argc, char** argv) {
 	/* Install the signal handlers */
 
 	/* These are the ones you will need to implement */
-	Signal(SIGINT, sigint_handler);   /* ctrl-c */
+	Signal(SIGINT, sigint_handler);	  /* ctrl-c */
 	Signal(SIGTSTP, sigtstp_handler); /* ctrl-z */
 	Signal(SIGCHLD, sigchld_handler); /* Terminated or stopped child */
 
@@ -221,9 +221,11 @@ void eval(char* cmdline) {
 	int i = 0;
 	for (i = 0; parsed_args[i] != NULL; i++) {
 		// check parsing
-		// printf("%s\n", parsed_args[i]);
+		//	printf("%s\n", parsed_args[i]);
 	}
 	sigset_t mask_all, mask_one, prev_one;
+	// mask_all 是屏蔽全部信号
+	// mask_one 是屏蔽SIGCHLD信号
 	Sigfillset(&mask_all);
 	Sigemptyset(&mask_one);
 	Sigaddset(&mask_one, SIGCHLD);
@@ -234,7 +236,7 @@ void eval(char* cmdline) {
 		Sigprocmask(SIG_BLOCK, &mask_one, &prev_one);
 		if ((pid = Fork()) == 0) {
 			// child process
-			// printf("in child process\n");
+			printf("in child process\n");
 			Sigprocmask(SIG_SETMASK, &prev_one,
 				    NULL);  // unblock SIGCHLD
 			// printf("before setpgid\n");
@@ -251,16 +253,16 @@ void eval(char* cmdline) {
 		addjob(jobs, pid, bg ? BG : FG, cmdline);
 		Sigprocmask(SIG_SETMASK, &prev_one, NULL);
 
-		pid = 0;
-		while (!pid) {
-			sigsuspend(&prev_one);
-		}
+		//		pid = 0;
+		//		while (!pid) {
+		//			sigsuspend(&prev_one);
+		//		}
 		// parent wait child
 		if (!bg) {
 			waitfg(pid);
 		} else {
 			// 应该先打shell,后打这行。。结果顺序反了。。
-			printf("%d %s", pid, cmdline);
+			printf("123 %d %s", pid, cmdline);
 		}
 	}
 	return;
@@ -275,7 +277,7 @@ void eval(char* cmdline) {
  */
 int parseline(const char* cmdline, char** argv) {
 	static char array[MAXLINE]; /* holds local copy of command line */
-	char* buf = array;	  /* ptr that traverses command line */
+	char* buf = array;	    /* ptr that traverses command line */
 	char* delim;		    /* points to first space delimiter */
 	int argc;		    /* number of args */
 	int bg;			    /* background job? */
@@ -439,6 +441,7 @@ int maxjid(struct job_t* jobs) {
 
 /* addjob - Add a job to the job list */
 int addjob(struct job_t* jobs, pid_t pid, int state, char* cmdline) {
+	printf("in add job\n");
 	int i;
 
 	if (pid < 1) return 0;
@@ -463,6 +466,7 @@ int addjob(struct job_t* jobs, pid_t pid, int state, char* cmdline) {
 
 /* deletejob - Delete a job whose PID=pid from the job list */
 int deletejob(struct job_t* jobs, pid_t pid) {
+	printf("in delete job\n");
 	int i;
 
 	if (pid < 1) return 0;
