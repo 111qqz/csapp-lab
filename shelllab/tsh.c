@@ -216,6 +216,11 @@ void Execve(char* filename, char* argv[], char* envp[]) {
 	}
 }
 
+void Kill(pid_t pid, int sig) {
+	if (kill(pid, sig) < 0) {
+		unix_error("kill error");
+	}
+}
 // list of errorh-handing wrapper functions end
 /*
  * eval - Evaluate the command line that the user has just typed in
@@ -414,6 +419,13 @@ void sigchld_handler(int sig) {
 			Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
 			deletejob(jobs, pid);
 			Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+		} else if (WIFSIGNALED(status)) {
+			printf("Job [%d] (%d) terminated by signal %d\n", pid,
+			       pid2jid(pid), WTERMSIG(status));
+			Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
+
+			deletejob(jobs, pid);
+			Sigprocmask(SIG_SETMASK, &prev_all, NULL);
 		}
 	}
 	errno = olderrno;
@@ -425,12 +437,12 @@ void sigchld_handler(int sig) {
  *    to the foreground job.
  */
 void sigint_handler(int sig) {
-	printf("in sigint handler\n");
+	// printf("in sigint handler\n");
 	pid_t fg_pid = fgpid(jobs);
 	if (fg_pid == 0) {
 		return;
 	}
-	return;
+	Kill(-fg_pid, SIGINT);
 }
 
 /*
