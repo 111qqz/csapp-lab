@@ -263,8 +263,6 @@ void eval(char* cmdline) {
 			// printf("before setpgid\n");
 			setpgid(0, 0);
 			// printf("before execve\n");
-			// 现在一个job会被两个process各add一次,这合理吗
-			// 先对齐测试数据
 
 			// 打log记得调用fflush,不然可能还没来得及输出到屏幕上就exit了
 			fflush(stdout);
@@ -279,21 +277,10 @@ void eval(char* cmdline) {
 		addjob(jobs, pid, bg ? BG : FG, cmdline);
 		Sigprocmask(SIG_SETMASK, &prev_one, NULL);
 
-		//	pid = 0;
-		//	while (!pid) {
-		//		sigsuspend(&prev_one);
-		//	}
-
-		//		pid = 0;
-		//		while (!pid) {
-		//			sigsuspend(&prev_one);
-		//		}
 		// parent wait child
 		if (!bg) {
-			//		printf("waitfg for pid:%d\n", pid);
 			waitfg(pid);
 		} else {
-			// 应该先打shell,后打这行。。结果顺序反了。。
 			printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
 		}
 	}
