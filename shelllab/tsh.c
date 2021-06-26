@@ -83,7 +83,16 @@ void unix_error(char* msg);
 void app_error(char* msg);
 typedef void handler_t(int);
 handler_t* Signal(int signum, handler_t* handler);
+/* 对trace file 做个说明
+ *
+ * 以trace04.txt 举例
+ * /bin/echo -e tsh> ./myspin 1 \046
+ * ./myspin 1 &
+ * 这其实是两条指令。。第一条指令是调用了 /bin/echo -e
+ * 然后还要注意.. /bin/echo那条是个fg command,最后的\046是输出字符串的一部分
+ */
 
+//
 /*
  * main - The shell's main routine
  */
@@ -140,6 +149,7 @@ int main(int argc, char** argv) {
 			fflush(stdout);
 			exit(0);
 		}
+		// printf("cmdline:%s\n", cmdline);
 
 		/* Evaluate the command line */
 		eval(cmdline);
@@ -158,6 +168,7 @@ pid_t Fork(void) {
 	if ((pid = fork()) < 0) {
 		unix_error("Fork error");
 	}
+	// printf("Fork return pid:%d\n", pid);
 	return pid;
 }
 
@@ -196,6 +207,14 @@ void Sigemptyset(sigset_t* set) {
 	*set = tmp;
 }
 
+void Execve(char* filename, char* argv[], char* envp[]) {
+	printf(" in Execve\n");
+	if (execve(filename, argv, envp) < 0) {
+		printf("%s: Command not found\n", filename);
+		exit(0);
+	}
+}
+
 // list of errorh-handing wrapper functions end
 /*
  * eval - Evaluate the command line that the user has just typed in
@@ -232,22 +251,27 @@ void eval(char* cmdline) {
 
 	if (builtin_cmd(parsed_args) == 0) {
 		pid_t pid;
+		// printf("bg:%d parsed_args:%s\n", bg, parsed_args[0]);
+
 		// block SIGCHLD
 		Sigprocmask(SIG_BLOCK, &mask_one, &prev_one);
 		if ((pid = Fork()) == 0) {
 			// child process
-			printf("in child process\n");
+			// printf("in child process\n");
 			Sigprocmask(SIG_SETMASK, &prev_one,
 				    NULL);  // unblock SIGCHLD
 			// printf("before setpgid\n");
 			setpgid(0, 0);
 			// printf("before execve\n");
-			if (execve(parsed_args[0], parsed_args, environ) < 0) {
-				printf("%s: Command not found\n",
-				       parsed_args[0]);
-				exit(0);
-			}
+			// 现在一个job会被两个process各add一次,这合理吗
+			// 先对齐测试数据
+
+			// 打log记得调用fflush,不然可能还没来得及输出到屏幕上就exit了
+			fflush(stdout);
+			fflush(stdout);
+			Execve(parsed_args[0], parsed_args, environ);
 		}
+		// printf("pid =%d\n", pid);
 		// printf("before add job block all signals\n");
 		Sigprocmask(SIG_BLOCK, &mask_all, NULL);
 		addjob(jobs, pid, bg ? BG : FG, cmdline);
@@ -259,10 +283,11 @@ void eval(char* cmdline) {
 		//		}
 		// parent wait child
 		if (!bg) {
+			// 顺序反了是因为没有等地啊fg结束就执行下一条了
 			waitfg(pid);
 		} else {
 			// 应该先打shell,后打这行。。结果顺序反了。。
-			printf("123 %d %s", pid, cmdline);
+			printf("[%d] (%d) %s", nextjid / 2, pid, cmdline);
 		}
 	}
 	return;
@@ -355,7 +380,12 @@ void do_bgfg(char** argv) {
 /*
  * waitfg - Block until process pid is no longer the foreground process
  */
-void waitfg(pid_t pid) {}
+void waitfg(pid_t pid) {
+	int status;
+	if (waitpid(pid, &status, 0) < 0) {
+		unix_error("waitfg: waitpid error");
+	}
+}
 
 /*****************
  * Signal handlers
@@ -391,6 +421,7 @@ void sigchld_handler(int sig) {
  *    to the foreground job.
  */
 void sigint_handler(int sig) {
+	printf("in sigint handler\n");
 	pid_t fg_pid = fgpid(jobs);
 	if (fg_pid == 0) {
 		return;
@@ -404,6 +435,7 @@ void sigint_handler(int sig) {
  *     foreground job by sending it a SIGTSTP.
  */
 void sigtstp_handler(int sig) {
+	printf("in sigtstp handler\n");
 	return;
 }
 
@@ -441,7 +473,7 @@ int maxjid(struct job_t* jobs) {
 
 /* addjob - Add a job to the job list */
 int addjob(struct job_t* jobs, pid_t pid, int state, char* cmdline) {
-	printf("in add job\n");
+	//	printf("in add job,nextjid:%d\n", nextjid);
 	int i;
 
 	if (pid < 1) return 0;
