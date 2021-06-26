@@ -208,7 +208,6 @@ void Sigemptyset(sigset_t* set) {
 }
 
 void Execve(char* filename, char* argv[], char* envp[]) {
-	printf(" in Execve\n");
 	if (execve(filename, argv, envp) < 0) {
 		printf("%s: Command not found\n", filename);
 		exit(0);
@@ -381,28 +380,37 @@ int builtin_cmd(char** argv) {
 /*
  * do_bgfg - Execute the builtin bg and fg commands
  */
+// 注意要tshref中各种异常情况的报错信息
 void do_bgfg(char** argv) {
 	char* cmd = argv[0];
 	char* id = argv[1];
 	if (id == NULL) {
-		printf("need id ");
+		printf("%s command requires PID or %%jobid argument\n", cmd);
 		return;
 	}
 
 	struct job_t* job;
 	if (id[0] == '%') {
 		int jid = atoi(&id[1]);
+		if (jid == 0) {
+			printf("%s: argument must be a PID or %%jobid\n", cmd);
+			return;
+		}
 		job = getjobjid(jobs, jid);
 		if (job == NULL) {
-			printf("missing job \n");
+			printf("%%%d: No such job\n", jid);
 			return;
 		}
 
 	} else {
 		pid_t pid = atoi(id);
+		if (pid == 0) {
+			printf("%s: argument must be a PID or %%jobid\n", cmd);
+			return;
+		}
 		job = getjobpid(jobs, pid);
 		if (job == NULL) {
-			printf("missing job\n");
+			printf("(%d): No such process\n", pid);
 			return;
 		}
 	}
