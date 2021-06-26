@@ -426,6 +426,13 @@ void sigchld_handler(int sig) {
 
 			deletejob(jobs, pid);
 			Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+		} else if (WIFSTOPPED(status)) {
+			printf("Job [%d] (%d) stopped by signal %d\n", pid,
+			       pid2jid(pid), WSTOPSIG(status));
+			struct job_t* job = getjobpid(jobs, pid);
+			if (job != NULL) {
+				job->state = ST;
+			}
 		}
 	}
 	errno = olderrno;
@@ -452,6 +459,13 @@ void sigint_handler(int sig) {
  */
 void sigtstp_handler(int sig) {
 	printf("in sigtstp handler\n");
+
+	pid_t fg_pid = fgpid(jobs);
+	if (fg_pid == 0) {
+		return;
+	}
+	// note: not use SIGSTOP
+	Kill(-fg_pid, SIGTSTP);
 	return;
 }
 
@@ -573,16 +587,6 @@ int pid2jid(pid_t pid) {
 	return 0;
 }
 
-/* listbgjobs Print background job list */
-void listbgjobs(struct job_t* jobs) {
-	int i;
-	for (i = 0; i < MAXJOBS; i++) {
-		if (jobs[i].pid != 0) {
-			printf("[%d] (%d) ", jobs[i].jid, jobs[i].pid);
-			printf("%s", jobs[i].cmdline);
-		}
-	}
-}
 /* listjobs - Print the job list */
 void listjobs(struct job_t* jobs) {
 	int i;
