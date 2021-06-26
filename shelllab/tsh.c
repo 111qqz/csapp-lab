@@ -42,6 +42,7 @@ int verbose = 0;	 /* if true, print additional output */
 int nextjid = 1;	 /* next job ID to allocate */
 char sbuf[MAXLINE];	 /* for composing sprintf messages */
 
+volatile sig_atomic_t pid;
 struct job_t {		       /* The job struct */
 	pid_t pid;	       /* job PID */
 	int jid;	       /* job ID [1, 2, ...] */
@@ -227,6 +228,7 @@ void Execve(char* filename, char* argv[], char* envp[]) {
  * background children don't receive SIGINT (SIGTSTP) from the kernel
  * when we type ctrl-c (ctrl-z) at the keyboard.
  */
+
 void eval(char* cmdline) {
 	char* parsed_args[MAXARGS];
 	char buf[MAXLINE];
@@ -237,11 +239,6 @@ void eval(char* cmdline) {
 		// ignore empty lines
 		return;
 	}
-	int i = 0;
-	for (i = 0; parsed_args[i] != NULL; i++) {
-		// check parsing
-		//	printf("%s\n", parsed_args[i]);
-	}
 	sigset_t mask_all, mask_one, prev_one;
 	// mask_all 是屏蔽全部信号
 	// mask_one 是屏蔽SIGCHLD信号
@@ -251,7 +248,7 @@ void eval(char* cmdline) {
 
 	if (builtin_cmd(parsed_args) == 0) {
 		pid_t pid;
-		// printf("bg:%d parsed_args:%s\n", bg, parsed_args[0]);
+		// printf("bg:%d cmdline :%s\n", bg, cmdline);
 
 		// block SIGCHLD
 		Sigprocmask(SIG_BLOCK, &mask_one, &prev_one);
@@ -269,13 +266,20 @@ void eval(char* cmdline) {
 			// 打log记得调用fflush,不然可能还没来得及输出到屏幕上就exit了
 			fflush(stdout);
 			fflush(stdout);
+			// 现在的background是虚假的。。其实还是会等待。。
+			// 如果后面都是bg指令，就不会等待，但是如果有fg指令，就会等待。
 			Execve(parsed_args[0], parsed_args, environ);
 		}
-		// printf("pid =%d\n", pid);
+		printf("pid =%d\n", pid);
 		// printf("before add job block all signals\n");
 		Sigprocmask(SIG_BLOCK, &mask_all, NULL);
 		addjob(jobs, pid, bg ? BG : FG, cmdline);
 		Sigprocmask(SIG_SETMASK, &prev_one, NULL);
+
+		//	pid = 0;
+		//	while (!pid) {
+		//		sigsuspend(&prev_one);
+		//	}
 
 		//		pid = 0;
 		//		while (!pid) {
@@ -283,11 +287,11 @@ void eval(char* cmdline) {
 		//		}
 		// parent wait child
 		if (!bg) {
-			// 顺序反了是因为没有等地啊fg结束就执行下一条了
+			printf("waitfg for pid:%d\n", pid);
 			waitfg(pid);
 		} else {
 			// 应该先打shell,后打这行。。结果顺序反了。。
-			printf("[%d] (%d) %s", nextjid / 2, pid, cmdline);
+			printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
 		}
 	}
 	return;
@@ -381,9 +385,8 @@ void do_bgfg(char** argv) {
  * waitfg - Block until process pid is no longer the foreground process
  */
 void waitfg(pid_t pid) {
-	int status;
-	if (waitpid(pid, &status, 0) < 0) {
-		unix_error("waitfg: waitpid error");
+	while (pid == fgpid(jobs)) {
+		sleep(0);
 	}
 }
 
@@ -398,16 +401,20 @@ void waitfg(pid_t pid) {
  *     available zombie children, but doesn't wait for any other
  *     currently running children to terminate.
  */
+
 void sigchld_handler(int sig) {
 	int olderrno = errno;
 	sigset_t mask_all, prev_all;
 	pid_t pid;
+	int status;
 	Sigfillset(&mask_all);
 
-	while ((pid = waitpid(-1, NULL, 0)) > 0) {
-		Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
-		deletejob(jobs, pid);
-		Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+	while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
+		if (WIFEXITED(status)) {
+			Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
+			deletejob(jobs, pid);
+			Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+		}
 	}
 	if (errno != ECHILD) {
 		unix_error("waitpid error");
@@ -473,9 +480,12 @@ int maxjid(struct job_t* jobs) {
 
 /* addjob - Add a job to the job list */
 int addjob(struct job_t* jobs, pid_t pid, int state, char* cmdline) {
-	//	printf("in add job,nextjid:%d\n", nextjid);
+	//	printf("in add job,nextjid:%d state:%d pid:%d cmdline:%s \n",
+	// nextjid,
+	// state, pid, cmdline);
 	int i;
 
+	// 子进程不执行addjob
 	if (pid < 1) return 0;
 
 	for (i = 0; i < MAXJOBS; i++) {
@@ -498,7 +508,7 @@ int addjob(struct job_t* jobs, pid_t pid, int state, char* cmdline) {
 
 /* deletejob - Delete a job whose PID=pid from the job list */
 int deletejob(struct job_t* jobs, pid_t pid) {
-	printf("in delete job\n");
+	printf("in delete job pid:%d\n", pid);
 	int i;
 
 	if (pid < 1) return 0;
@@ -554,6 +564,16 @@ int pid2jid(pid_t pid) {
 	return 0;
 }
 
+/* listbgjobs Print background job list */
+void listbgjobs(struct job_t* jobs) {
+	int i;
+	for (i = 0; i < MAXJOBS; i++) {
+		if (jobs[i].pid != 0) {
+			printf("[%d] (%d) ", jobs[i].jid, jobs[i].pid);
+			printf("%s", jobs[i].cmdline);
+		}
+	}
+}
 /* listjobs - Print the job list */
 void listjobs(struct job_t* jobs) {
 	int i;
