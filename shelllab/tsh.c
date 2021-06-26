@@ -415,6 +415,8 @@ void do_bgfg(char** argv) {
 
 	} else {
 		job->state = FG;
+		// 变为fg后，需要一直等到结束
+		waitfg(job->pid);
 	}
 }
 
@@ -452,15 +454,15 @@ void sigchld_handler(int sig) {
 			deletejob(jobs, pid);
 			Sigprocmask(SIG_SETMASK, &prev_all, NULL);
 		} else if (WIFSIGNALED(status)) {
-			printf("Job [%d] (%d) terminated by signal %d\n", pid,
-			       pid2jid(pid), WTERMSIG(status));
+			printf("Job (%d) [%d] terminated by signal %d\n",
+			       pid2jid(pid), pid, WTERMSIG(status));
 			Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
 
 			deletejob(jobs, pid);
 			Sigprocmask(SIG_SETMASK, &prev_all, NULL);
 		} else if (WIFSTOPPED(status)) {
-			printf("Job [%d] (%d) stopped by signal %d\n", pid,
-			       pid2jid(pid), WSTOPSIG(status));
+			printf("Job (%d) [%d] stopped by signal %d\n",
+			       pid2jid(pid), pid, WSTOPSIG(status));
 			struct job_t* job = getjobpid(jobs, pid);
 			if (job != NULL) {
 				job->state = ST;
