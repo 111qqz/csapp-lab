@@ -270,7 +270,7 @@ void eval(char* cmdline) {
 			// 如果后面都是bg指令，就不会等待，但是如果有fg指令，就会等待。
 			Execve(parsed_args[0], parsed_args, environ);
 		}
-		printf("pid =%d\n", pid);
+		//	printf("pid =%d\n", pid);
 		// printf("before add job block all signals\n");
 		Sigprocmask(SIG_BLOCK, &mask_all, NULL);
 		addjob(jobs, pid, bg ? BG : FG, cmdline);
@@ -287,7 +287,7 @@ void eval(char* cmdline) {
 		//		}
 		// parent wait child
 		if (!bg) {
-			printf("waitfg for pid:%d\n", pid);
+			//		printf("waitfg for pid:%d\n", pid);
 			waitfg(pid);
 		} else {
 			// 应该先打shell,后打这行。。结果顺序反了。。
@@ -416,9 +416,6 @@ void sigchld_handler(int sig) {
 			Sigprocmask(SIG_SETMASK, &prev_all, NULL);
 		}
 	}
-	if (errno != ECHILD) {
-		unix_error("waitpid error");
-	}
 	errno = olderrno;
 }
 
@@ -508,7 +505,7 @@ int addjob(struct job_t* jobs, pid_t pid, int state, char* cmdline) {
 
 /* deletejob - Delete a job whose PID=pid from the job list */
 int deletejob(struct job_t* jobs, pid_t pid) {
-	printf("in delete job pid:%d\n", pid);
+	//	printf("in delete job pid:%d\n", pid);
 	int i;
 
 	if (pid < 1) return 0;
