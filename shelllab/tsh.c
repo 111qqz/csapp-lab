@@ -42,7 +42,6 @@ int verbose = 0;	 /* if true, print additional output */
 int nextjid = 1;	 /* next job ID to allocate */
 char sbuf[MAXLINE];	 /* for composing sprintf messages */
 
-volatile sig_atomic_t pid;
 struct job_t {		       /* The job struct */
 	pid_t pid;	       /* job PID */
 	int jid;	       /* job ID [1, 2, ...] */
@@ -383,7 +382,40 @@ int builtin_cmd(char** argv) {
  * do_bgfg - Execute the builtin bg and fg commands
  */
 void do_bgfg(char** argv) {
-	return;
+	char* cmd = argv[0];
+	char* id = argv[1];
+	if (id == NULL) {
+		printf("need id ");
+		return;
+	}
+
+	struct job_t* job;
+	if (id[0] == '%') {
+		int jid = atoi(&id[1]);
+		job = getjobjid(jobs, jid);
+		if (job == NULL) {
+			printf("missing job \n");
+			return;
+		}
+
+	} else {
+		pid_t pid = atoi(id);
+		job = getjobpid(jobs, pid);
+		if (job == NULL) {
+			printf("missing job\n");
+			return;
+		}
+	}
+
+	Kill(-job->pid, SIGCONT);
+	if (cmd[0] == 'b') {
+		job->state = BG;
+		printf("[%d] (%d) %s", pid2jid(job->pid), job->pid,
+		       job->cmdline);
+
+	} else {
+		job->state = FG;
+	}
 }
 
 /*
@@ -444,7 +476,6 @@ void sigchld_handler(int sig) {
  *    to the foreground job.
  */
 void sigint_handler(int sig) {
-	// printf("in sigint handler\n");
 	pid_t fg_pid = fgpid(jobs);
 	if (fg_pid == 0) {
 		return;
@@ -458,8 +489,6 @@ void sigint_handler(int sig) {
  *     foreground job by sending it a SIGTSTP.
  */
 void sigtstp_handler(int sig) {
-	printf("in sigtstp handler\n");
-
 	pid_t fg_pid = fgpid(jobs);
 	if (fg_pid == 0) {
 		return;
